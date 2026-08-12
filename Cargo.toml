@@ -1,0 +1,9 @@
+[package]
+name = "zerok"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+ariadne = "0.6.0"
+chumsky = "0.13.0"
