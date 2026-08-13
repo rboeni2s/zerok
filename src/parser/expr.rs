@@ -24,6 +24,10 @@ pub enum Expr
     },
 
     Chain(Vec<Expr>),
+
+    // Placeholder for a term that could not be parsed, so that parsing of the
+    // surrounding chain can recover and keep looking for further errors.
+    Error,
 }
 
 
@@ -81,6 +85,21 @@ impl<'src> Expr
                     val: Box::new(val),
                 }),
             ));
+
+            //TODO: Comment
+            let terminator = || {
+                choice((
+                    just(Synt::Semicolon.repr()).ignored(),
+                    just(Synt::RParen.repr()).ignored(),
+                    end(),
+                ))
+            };
+
+            let term_expr = term_expr
+                .then_ignore(terminator().rewind())
+                .recover_with(skip_until(any().ignored(), terminator().rewind(), || {
+                    Self::Error
+                }));
 
             // Chain term_exprs separated by ";"
             let expr_chain = term_expr
