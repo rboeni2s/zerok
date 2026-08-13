@@ -111,7 +111,7 @@ impl<'src> Binop
         just(Synt::Slash.repr()).to(Self::Div)
     }
 
-    fn r#mod() -> impl P<'src, Self>
+    fn modulo() -> impl P<'src, Self>
     {
         just(Synt::Percent.repr()).to(Self::Mod)
     }
@@ -168,7 +168,7 @@ impl<'src> Expr
         // Create the atom parser
         let atom = Atom::parser().padded().map(Self::Atom);
 
-        let expr = recursive(move |expr| {
+        recursive(move |expr| {
             // Check if this expressions is "geklammert"
             let parenthesized = expr.clone().delimited_by(
                 just(Synt::LParen.repr()).padded(),
@@ -180,33 +180,33 @@ impl<'src> Expr
 
             // Parse the different operators and set their associativity and precedence
             let term_expr = operand.pratt((
-                infix(left(0), Binop::add(), |lhs, _, rhs, _| Self::Binop {
-                    op: Binop::Add,
+                infix(left(0), Binop::add(), |lhs, op, rhs, _| Self::Binop {
+                    op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
-                infix(left(0), Binop::sub(), |lhs, _, rhs, _| Self::Binop {
-                    op: Binop::Sub,
+                infix(left(0), Binop::sub(), |lhs, op, rhs, _| Self::Binop {
+                    op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
-                infix(left(1), Binop::mul(), |lhs, _, rhs, _| Self::Binop {
-                    op: Binop::Mul,
+                infix(left(1), Binop::mul(), |lhs, op, rhs, _| Self::Binop {
+                    op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
-                infix(left(1), Binop::div(), |lhs, _, rhs, _| Self::Binop {
-                    op: Binop::Div,
+                infix(left(1), Binop::div(), |lhs, op, rhs, _| Self::Binop {
+                    op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
-                infix(left(1), Binop::r#mod(), |lhs, _, rhs, _| Self::Binop {
-                    op: Binop::Mod,
+                infix(left(1), Binop::modulo(), |lhs, op, rhs, _| Self::Binop {
+                    op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
-                infix(right(3), Binop::pow(), |lhs, _, rhs, _| Self::Binop {
-                    op: Binop::Pow,
+                infix(right(3), Binop::pow(), |lhs, op, rhs, _| Self::Binop {
+                    op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
@@ -238,9 +238,7 @@ impl<'src> Expr
                     }
                     None => chain,
                 })
-        });
-
-        expr
+        })
     }
 }
 
