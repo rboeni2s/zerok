@@ -22,6 +22,8 @@ enum Synt
     Slash,
     LParen,
     RParen,
+    Percent,
+    StarStar,
 }
 
 impl Synt
@@ -38,6 +40,8 @@ impl Synt
             Synt::Slash => "/",
             Synt::LParen => "(",
             Synt::RParen => ")",
+            Synt::Percent => "%",
+            Synt::StarStar => "**",
         }
     }
 }
@@ -80,6 +84,8 @@ enum Binop
     Sub,
     Mul,
     Div,
+    Mod,
+    Pow,
 }
 
 
@@ -104,6 +110,16 @@ impl<'src> Binop
     {
         just(Synt::Slash.repr()).to(Self::Div)
     }
+
+    fn r#mod() -> impl P<'src, Self>
+    {
+        just(Synt::Percent.repr()).to(Self::Mod)
+    }
+
+    fn pow() -> impl P<'src, Self>
+    {
+        just(Synt::StarStar.repr()).to(Self::Pow)
+    }
 }
 
 
@@ -118,7 +134,7 @@ impl<'src> Unaop
 {
     fn neg() -> impl P<'src, Self>
     {
-        just(Synt::Minus.repr()).to(Self::Neg)
+        just(Synt::Minus.repr()).padded().to(Self::Neg)
     }
 }
 
@@ -173,6 +189,30 @@ impl<'src> Expr
                     op: Binop::Sub,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
+                }),
+                infix(left(1), Binop::mul(), |lhs, _, rhs, _| Self::Binop {
+                    op: Binop::Mul,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                }),
+                infix(left(1), Binop::div(), |lhs, _, rhs, _| Self::Binop {
+                    op: Binop::Div,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                }),
+                infix(left(1), Binop::r#mod(), |lhs, _, rhs, _| Self::Binop {
+                    op: Binop::Mod,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                }),
+                infix(right(3), Binop::pow(), |lhs, _, rhs, _| Self::Binop {
+                    op: Binop::Pow,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                }),
+                prefix(2, Unaop::neg(), |op, val, _| Self::Unaop {
+                    op,
+                    val: Box::new(val),
                 }),
             ));
 
