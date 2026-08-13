@@ -152,7 +152,6 @@ impl<'src> Expr
         // Create the atom parser
         let atom = Atom::parser().padded().map(Self::Atom);
 
-        // Create a parser for one expression
         let expr = recursive(move |expr| {
             // Check if this expressions is "geklammert"
             let parenthesized = expr.clone().delimited_by(
@@ -160,11 +159,11 @@ impl<'src> Expr
                 just(Synt::RParen.repr()).padded(),
             );
 
-            // Operands to operators can either be an atom or an expression
+            // Operands to operators can either be an atom or a (chained) expression
             let operand = atom.clone().or(parenthesized);
 
-            // Parse the different operators and set der associativity and precedence
-            operand.pratt((
+            // Parse the different operators and set their associativity and precedence
+            let term_expr = operand.pratt((
                 infix(left(0), Binop::add(), |lhs, _, rhs, _| Self::Binop {
                     op: Binop::Add,
                     lhs: Box::new(lhs),
@@ -175,31 +174,33 @@ impl<'src> Expr
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
-            ))
+            ));
+
+            // Chain term_exprs separated by ";"
+            let expr_chain = term_expr
+                .separated_by(just(Synt::Semicolon.repr()).padded())
+                .collect::<Vec<_>>()
+                .map(Self::Chain);
+
+            // Check if the expression chain ends in ";" and add a nop node if it does
+            expr_chain
+                .then(just(Synt::Semicolon.repr()).padded().or_not())
+                .map(|(mut chain, term)| match term
+                {
+                    Some(_) =>
+                    {
+                        if let Self::Chain(chain) = &mut chain
+                        {
+                            chain.push(Expr::Atom(Atom::Nop));
+                        }
+
+                        chain
+                    }
+                    None => chain,
+                })
         });
 
-        // Create a parser that can chain expressions
-        let expr_chain = expr
-            .separated_by(just(Synt::Semicolon.repr()).padded())
-            .collect::<Vec<_>>()
-            .map(|v| Self::Chain(v.into_iter().collect()));
-
-        // Check if the expression chain ends in ";" and add a nop node if it does
-        expr_chain
-            .then(just(Synt::Semicolon.repr()).padded().or_not())
-            .map(|(mut chain, term)| match term
-            {
-                Some(_) =>
-                {
-                    if let Self::Chain(chain) = &mut chain
-                    {
-                        chain.push(Expr::Atom(Atom::Nop));
-                    }
-
-                    chain
-                }
-                None => chain,
-            })
+        expr
     }
 }
 
