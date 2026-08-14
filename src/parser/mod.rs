@@ -17,6 +17,7 @@ impl<'a, T, I> P<'a, T> for I where I: Parser<'a, &'a str, T, extra::Err<Rich<'a
 enum Synt
 {
     Semicolon,
+    Doublecolon,
     Plus,
     Star,
     Nop,
@@ -26,6 +27,11 @@ enum Synt
     RParen,
     Percent,
     StarStar,
+    RBrace,
+    LBrace,
+    Comma,
+    Decl,
+    Eq,
 }
 
 
@@ -45,6 +51,12 @@ impl Synt
             Synt::RParen => ")",
             Synt::Percent => "%",
             Synt::StarStar => "**",
+            Synt::Doublecolon => ":",
+            Synt::RBrace => "}",
+            Synt::LBrace => "{",
+            Synt::Comma => ",",
+            Synt::Decl => "decl",
+            Synt::Eq => "=",
         }
     }
 }

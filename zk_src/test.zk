@@ -1,3 +1,1 @@
-"Hallo" + 3;
-8 + ;;
-nopp
+decl test: int = 10; 7
