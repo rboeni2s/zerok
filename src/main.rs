@@ -1,8 +1,6 @@
-use anyhow::{Context, Result, anyhow};
-use chumsky::Parser;
+use anyhow::{Context, Result};
 use std::process::ExitCode;
-use zerok::diagnostic;
-use zerok::parser::Expr;
+use zerok::parser::{self, Expr};
 
 
 fn main() -> ExitCode
@@ -28,21 +26,9 @@ fn run() -> Result<()>
 
     let source_file_content = std::fs::read_to_string(&source_file_path)?;
 
-    let (ast, errors) = Expr::parser()
-        .parse(&source_file_content)
-        .into_output_errors();
+    let ast = parser::parse(Expr::parser(), &source_file_content, &source_file_path)?;
 
-    for err in &errors
-    {
-        diagnostic::print_err(&source_file_path, &source_file_content, err)?;
-    }
-
-    if !errors.is_empty()
-    {
-        return Err(anyhow!("Parsing failed with {} error(s)", errors.len()));
-    }
-
-    dbg!(ast.context("Parser produced no output despite no errors")?);
+    dbg!(ast);
 
     Ok(())
 }

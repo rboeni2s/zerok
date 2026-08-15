@@ -6,7 +6,7 @@ use chumsky::prelude::Rich;
 type Err<'a> = Rich<'a, char>;
 
 
-pub fn print_err(src_path: &String, src: &String, err: &Err<'_>) -> Result<(), anyhow::Error>
+pub fn print_err(src_path: &str, src: &str, err: &Err<'_>) -> Result<(), anyhow::Error>
 {
     Report::build(ReportKind::Error, (src_path, err.span().into_range()))
         .with_message(err.to_string())
@@ -21,7 +21,7 @@ pub fn print_err(src_path: &String, src: &String, err: &Err<'_>) -> Result<(), a
 }
 
 
-pub fn print_warn(src_path: &String, src: &String, err: &Err<'_>) -> Result<(), anyhow::Error>
+pub fn print_warn(src_path: &str, src: &str, err: &Err<'_>) -> Result<(), anyhow::Error>
 {
     Report::build(ReportKind::Warning, (src_path, err.span().into_range()))
         .with_message(err.to_string())
@@ -36,7 +36,7 @@ pub fn print_warn(src_path: &String, src: &String, err: &Err<'_>) -> Result<(), 
 }
 
 
-pub fn print_info(src_path: &String, src: &String, err: &Err<'_>) -> Result<(), anyhow::Error>
+pub fn print_info(src_path: &str, src: &str, err: &Err<'_>) -> Result<(), anyhow::Error>
 {
     Report::build(ReportKind::Advice, (src_path, err.span().into_range()))
         .with_message(err.to_string())

@@ -2,7 +2,7 @@ use super::{P, Synt};
 use chumsky::prelude::*;
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Binop
 {
     Add,
@@ -48,7 +48,7 @@ impl<'src> Binop
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Unaop
 {
     Neg,

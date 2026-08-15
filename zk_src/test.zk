@@ -1,1 +1,1 @@
-decl test: int = 10; 7
+decl test: int = (-10; 0); 7;

@@ -1,8 +1,10 @@
-mod atom;
-mod expr;
-mod ops;
+pub mod ast_builder;
+pub mod atom;
+pub mod expr;
+pub mod ops;
 
 
+use anyhow::Context;
 use chumsky::prelude::*;
 
 
@@ -59,4 +61,21 @@ impl Synt
             Synt::Eq => "=",
         }
     }
+}
+
+
+pub fn parse<'a>(
+    parser: impl P<'a, Expr<'a>>,
+    src: &'a str,
+    src_path: &str,
+) -> anyhow::Result<Expr<'a>>
+{
+    let (ast, errors) = Expr::parser().parse(src).into_output_errors();
+
+    for err in &errors
+    {
+        crate::diagnostic::print_err(src_path, src, err)?;
+    }
+
+    Ok(ast.context(format!("Parsing failed with {} error(s)", errors.len()))?)
 }
