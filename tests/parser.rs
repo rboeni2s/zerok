@@ -1,7 +1,10 @@
 use zerok::parser::{self, P, ast_builder::*};
 
 
-fn parse<'a, T: P<'a, Expr<'a>>>(parser: &T, input: &'a str) -> Result<Expr<'a>, anyhow::Error>
+fn parse<'a, T: P<'a, Node<'a, ()>>>(
+    parser: &T,
+    input: &'a str,
+) -> Result<Node<'a, ()>, anyhow::Error>
 {
     parser::parse(parser.clone(), input, "")
 }

@@ -26,7 +26,11 @@ fn run() -> Result<()>
 
     let source_file_content = std::fs::read_to_string(&source_file_path)?;
 
-    let ast = parser::parse(Expr::parser(), &source_file_content, &source_file_path)?;
+    let ast = parser::parse(
+        Expr::<()>::parser(),
+        &source_file_content,
+        &source_file_path,
+    )?;
 
     dbg!(ast);
 

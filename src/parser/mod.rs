@@ -1,3 +1,4 @@
+pub mod ast;
 pub mod ast_builder;
 pub mod atom;
 pub mod expr;
@@ -6,6 +7,7 @@ pub mod ops;
 
 use anyhow::Context;
 use chumsky::prelude::*;
+use std::{marker::PhantomData, range::Range};
 
 
 pub use expr::Expr;
@@ -13,6 +15,9 @@ pub use expr::Expr;
 
 pub trait P<'a, T>: Parser<'a, &'a str, T, extra::Err<Rich<'a, char>>> + Clone {}
 impl<'a, T, I> P<'a, T> for I where I: Parser<'a, &'a str, T, extra::Err<Rich<'a, char>>> + Clone {}
+
+
+pub type Node<'a, D> = ast::AstNode<'a, Expr<'a, D>, D>;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,11 +69,13 @@ impl Synt
 }
 
 
-pub fn parse<'a>(
-    parser: impl P<'a, Expr<'a>>,
+pub fn parse<'a, D>(
+    parser: impl P<'a, Node<'a, D>>,
     src: &'a str,
     src_path: &str,
-) -> anyhow::Result<Expr<'a>>
+) -> anyhow::Result<Node<'a, D>>
+where
+    D: Default + 'a,
 {
     let (ast, errors) = Expr::parser().parse(src).into_output_errors();
 
