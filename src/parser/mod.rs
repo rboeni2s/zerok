@@ -84,5 +84,5 @@ where
         crate::diagnostic::print_err(src_path, src, err)?;
     }
 
-    Ok(ast.context(format!("Parsing failed with {} error(s)", errors.len()))?)
+    ast.context(format!("Parsing failed with {} error(s)", errors.len()))
 }

@@ -29,21 +29,21 @@ impl<T> Store<T>
     /// Reserves one cell and returns its address
     pub fn reserve_one(&self) -> usize
     {
-        let addr = self
-            .next_addr
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        
 
-        addr
+        self
+            .next_addr
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Reserves `n` cells and returns the first address
     pub fn reserve_many(&self, n: NonZero<usize>) -> usize
     {
-        let addr = self
-            .next_addr
-            .fetch_add(n.into(), std::sync::atomic::Ordering::Relaxed);
+        
 
-        addr
+        self
+            .next_addr
+            .fetch_add(n.into(), std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Reads from `cell`, fails if `cell` does not exist
