@@ -1,17 +1,38 @@
 mod env;
 
 
-use crate::parser::{
-    Expr,
-    Node,
-    atom::Atom,
-    ops::{Binop, Unaop},
+use crate::{
+    diagnostic,
+    parser::{
+        Expr,
+        Node,
+        atom::Atom,
+        ops::{Binop, Unaop},
+    },
 };
+use chumsky::span::{SimpleSpan, Span};
 use std::sync::atomic::AtomicUsize;
 
 
 pub use crate::annotator::env::{Env, EnvEntry};
 
+
+fn make_err<S>(span: S, err: impl ToString) -> Result<Annotation, (S, String)>
+{
+    Err((span, err.to_string()))
+}
+
+
+macro_rules! err {
+    ($span:expr, $err:expr) => {
+        make_err($span, $err)
+    };
+
+    ($span:expr, $err:expr, $($args:expr),+) => {
+        make_err($span, format!($err, $($args),+))
+    };
+
+}
 
 /// The Type of a node in the ast
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -41,11 +62,23 @@ impl From<&Atom> for Kind
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Annotation
 {
-    /// Infered or given type
+    /// Inferred or given type
     pub kind: Kind,
 
     /// store cell index
     pub cell: Option<usize>,
+}
+
+
+impl Default for Annotation
+{
+    fn default() -> Self
+    {
+        Self {
+            kind: Kind::None,
+            cell: None,
+        }
+    }
 }
 
 
@@ -58,78 +91,115 @@ impl<'a> Node<'a, Option<Annotation>>
     }
 
     pub fn annotate(&mut self, env: &Env<'a, EnvEntry>)
+    -> Result<Annotation, (SimpleSpan, String)>
     {
+        let span = self.span;
         let annotation = match &mut self.inner
         {
             // Typecheck and annotate the atoms
-            Expr::Atom(atom) => match atom
+            Expr::Atom(atom) =>
             {
-                Atom::Nop => Ok(Annotation {
-                    kind: Kind::None,
-                    cell: None,
-                }),
+                match atom
+                {
+                    Atom::Nop =>
+                    {
+                        Ok(Annotation {
+                            kind: Kind::None,
+                            cell: None,
+                        })
+                    }
 
-                atom => Ok(Annotation {
-                    kind: Kind::from(&*atom),
-                    cell: Some(env.reserve_and_put(EnvEntry::Atom(atom.clone()))),
-                }),
-            },
+                    atom =>
+                    {
+                        Ok(Annotation {
+                            kind: Kind::from(&*atom),
+                            cell: Some(env.reserve_and_put(EnvEntry::Atom(atom.clone()))),
+                        })
+                    }
+                }
+            }
 
             Expr::Binop { op, lhs, rhs } =>
             {
-                lhs.annotate(env);
-                rhs.annotate(env);
-
-                let lhs = lhs.data.as_ref().unwrap().kind;
-                let rhs = rhs.data.as_ref().unwrap().kind;
+                let lhs = lhs.annotate(env)?.kind;
+                let rhs = rhs.annotate(env)?.kind;
 
                 match binop_compat(op, lhs, rhs, env)
                 {
-                    Some(ret) => Ok(Annotation {
-                        kind: ret,
-                        cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
-                    }),
-                    None => Err(format!(
-                        "Cannot apply {op:?} to arguments of type {lhs:?} and {rhs:?}"
-                    )),
+                    Some(ret) =>
+                    {
+                        Ok(Annotation {
+                            kind: ret,
+                            cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                        })
+                    }
+                    None =>
+                    {
+                        err!(
+                            span,
+                            "Cannot apply {:?} to arguments of type {:?} and {:?}",
+                            op,
+                            lhs,
+                            rhs
+                        )
+                    }
                 }
             }
 
             Expr::Unaop { op, val } =>
             {
-                val.annotate(env);
-
-                let val = val.data.as_ref().unwrap().kind;
+                let val = val.annotate(env)?.kind;
 
                 match unaop_compat(op, val, env)
                 {
-                    Some(ret) => Ok(Annotation {
-                        kind: ret,
-                        cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
-                    }),
+                    Some(ret) =>
+                    {
+                        Ok(Annotation {
+                            kind: ret,
+                            cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                        })
+                    }
 
-                    None => Err(format!("Cannot apply {op:?} to argument of type {val:?}")),
+                    None => err!(span, "Cannot apply {:?} to argument of type {:?}", op, val),
                 }
             }
 
-            Expr::Decl { name, kind, val } => todo!(),
+            Expr::Decl { name, kind, val } =>
+            {
+                err!(span, "Declarations sind noch nicht implementiert")
+            }
 
             Expr::Chain(ast_nodes) =>
             {
-                let mut last_annotation = Err(format!("Empty expression chain"));
+                let mut last_annotation = Annotation::default();
 
                 for ast in ast_nodes
                 {
-                    ast.annotate(env);
-                    //TODO: Hier weiter
+                    last_annotation = ast.annotate(env)?;
                 }
+
+                Ok(last_annotation)
             }
 
             Expr::ParseError =>
             {
-                todo!("Überlegen, was der Typechecker mit einem Parse Error macht...")
+                err!(
+                    span,
+                    "Jemand hat sich noch nicht überlegt, ob der Typ-Checker bei ParserFehler trotzdem versuchen könnte das Programm nach dem Fehler zu checken..."
+                )
             }
         };
+
+        match annotation
+        {
+            Ok(annotation) =>
+            {
+                self.data = Some(annotation);
+                Ok(annotation)
+            }
+
+            e => e,
+        }
     }
 }
 
@@ -140,6 +210,11 @@ fn binop_compat<'a>(op: &Binop, lhs: Kind, rhs: Kind, _env: &Env<'a, EnvEntry>) 
     match (op, lhs, rhs)
     {
         (Binop::Add, Kind::Num, Kind::Num) => Some(Kind::Num),
+        (Binop::Sub, Kind::Num, Kind::Num) => Some(Kind::Num),
+        (Binop::Div, Kind::Num, Kind::Num) => Some(Kind::Num),
+        (Binop::Mul, Kind::Num, Kind::Num) => Some(Kind::Num),
+        (Binop::Mod, Kind::Num, Kind::Num) => Some(Kind::Num),
+        (Binop::Pow, Kind::Num, Kind::Num) => Some(Kind::Num),
         _ => None,
     }
 }

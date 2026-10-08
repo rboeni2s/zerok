@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
+use chumsky::error::Rich;
 use std::process::ExitCode;
 use zerok::{
     annotator::{self, Annotation, EnvEntry},
+    diagnostic,
     parser::{self, Expr},
 };
 
@@ -12,7 +14,7 @@ fn main() -> ExitCode
     {
         Err(e) =>
         {
-            eprintln!("{e}");
+            eprintln!("Aborted, due to {e}");
             ExitCode::FAILURE
         }
 
@@ -37,7 +39,16 @@ fn run() -> Result<()>
     )?;
 
     // Annotate the ast
-    ast.annotate(&env);
+    if let Err((span, msg)) = ast.annotate(&env)
+    {
+        diagnostic::print_err(
+            &source_file_path,
+            &source_file_content,
+            &Rich::custom(span, msg),
+        )?;
+
+        return Err(anyhow::anyhow!("Type Error"));
+    }
 
     dbg!(ast);
 
