@@ -168,6 +168,7 @@ impl<'a, T> Env<'a, T>
 }
 
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum EnvEntry
 {
     Atom(Atom),

@@ -1,7 +1,10 @@
 use crate::parser::Expr;
 use chumsky::span::SimpleSpan;
 use std::marker::PhantomData;
-use std::range::Range;
+
+
+/// A node of the expression ast, `D` is data attached to each node by later passes, e.g. the type annotations
+pub type Node<'a, D> = AstNode<'a, Expr<'a, D>, D>;
 
 
 #[derive(Debug, Clone)]

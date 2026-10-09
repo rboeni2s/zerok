@@ -1,20 +1,15 @@
 mod env;
+mod kind;
 
 
-use crate::{
-    diagnostic,
-    parser::{
-        Expr,
-        Node,
-        atom::Atom,
-        ops::{Binop, Unaop},
-    },
-};
-use chumsky::span::{SimpleSpan, Span};
+use crate::parser::{Expr, Node, atom::Atom};
+use chumsky::span::SimpleSpan;
+use kind::{binop_compat, cast_compat, unaop_compat};
 use std::{rc::Rc, sync::atomic::AtomicUsize};
 
 
-pub use crate::annotator::env::{Env, EnvEntry};
+pub use env::{Env, EnvEntry};
+pub use kind::Kind;
 
 
 fn make_err<S>(span: S, err: impl ToString) -> Result<Annotation, (S, String)>
@@ -33,45 +28,6 @@ macro_rules! err {
     };
 
 }
-
-/// The Type of a node in the ast
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Kind
-{
-    Num,
-    String,
-    None,
-}
-
-
-impl Kind
-{
-    fn from_str(value: &str) -> Option<Self>
-    {
-        match value
-        {
-            "num" => Some(Kind::Num),
-            "string" => Some(Kind::String),
-            "none" => Some(Kind::None),
-            _ => None,
-        }
-    }
-}
-
-
-impl From<&Atom> for Kind
-{
-    fn from(value: &Atom) -> Self
-    {
-        match value
-        {
-            Atom::Str(_) => Kind::String,
-            Atom::Num(_) => Kind::Num,
-            Atom::Nop => Kind::None,
-        }
-    }
-}
-
 
 /// The Annotations for one ast node
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -105,9 +61,33 @@ impl<'a> Node<'a, Option<Annotation>>
         REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Returns true if the type of this node is only determined by number literals, so it adapts to the expected type
+    fn is_untyped_literal(&self) -> bool
+    {
+        match &self.inner
+        {
+            Expr::Atom(atom) => matches!(atom, Atom::Int(_) | Atom::Float(_)),
+            Expr::Unaop { val, .. } => val.is_untyped_literal(),
+            Expr::Binop { lhs, rhs, .. } => lhs.is_untyped_literal() && rhs.is_untyped_literal(),
+            Expr::Chain(ast_nodes) => ast_nodes.last().is_some_and(|ast| ast.is_untyped_literal()),
+            _ => false,
+        }
+    }
+
     pub fn annotate(
         &mut self,
         env: &Rc<Env<'a, EnvEntry>>,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        self.annotate_expecting(env, None)
+    }
+
+    /// Annotates this node, `expected` is the type the surrounding expression expects (if known) and is used to
+    /// determine the type of number literals
+    fn annotate_expecting(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+        expected: Option<Kind>,
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
         let span = self.span;
@@ -128,8 +108,15 @@ impl<'a> Node<'a, Option<Annotation>>
 
                     atom =>
                     {
+                        let kind = Kind::of_atom(atom, expected);
+
+                        if !kind.fits(atom)
+                        {
+                            return err!(span, "Literal {} does not fit into {}", atom, kind);
+                        }
+
                         Ok(Annotation {
-                            kind: Kind::from(&*atom),
+                            kind,
                             cell: Some(env.reserve_and_put(EnvEntry::Atom(atom.clone()))),
                         })
                     }
@@ -138,8 +125,20 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Binop { op, lhs, rhs } =>
             {
-                let lhs = lhs.annotate(&env.child_env())?.kind;
-                let rhs = rhs.annotate(&env.child_env())?.kind;
+                // All operators return the type of their operands, so the expected type is passed on to the operands.
+                // Untyped literals take the type of the other operand, so the operand with a known type is annotated first
+                let (lhs, rhs) = if lhs.is_untyped_literal() && !rhs.is_untyped_literal()
+                {
+                    let rhs = rhs.annotate_expecting(&env.child_env(), expected)?.kind;
+                    let lhs = lhs.annotate_expecting(&env.child_env(), Some(rhs))?.kind;
+                    (lhs, rhs)
+                }
+                else
+                {
+                    let lhs = lhs.annotate_expecting(&env.child_env(), expected)?.kind;
+                    let rhs = rhs.annotate_expecting(&env.child_env(), Some(lhs))?.kind;
+                    (lhs, rhs)
+                };
 
                 match binop_compat(op, lhs, rhs, env)
                 {
@@ -154,7 +153,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         err!(
                             span,
-                            "Cannot apply {:?} to arguments of type {:?} and {:?}",
+                            "Cannot apply {:?} to arguments of type {} and {}",
                             op,
                             lhs,
                             rhs
@@ -165,7 +164,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Unaop { op, val } =>
             {
-                let val = val.annotate(&env.child_env())?.kind;
+                let val = val.annotate_expecting(&env.child_env(), expected)?.kind;
 
                 match unaop_compat(op, val, env)
                 {
@@ -177,25 +176,25 @@ impl<'a> Node<'a, Option<Annotation>>
                         })
                     }
 
-                    None => err!(span, "Cannot apply {:?} to argument of type {:?}", op, val),
+                    None => err!(span, "Cannot apply {:?} to argument of type {}", op, val),
                 }
             }
 
             Expr::Decl { name, kind, val } =>
             {
-                let val = val.annotate(&env.child_env())?;
-
                 let Some(kind) = Kind::from_str(kind)
                 else
                 {
                     return err!(span, "Unknown type {:?}", kind);
                 };
 
+                let val = val.annotate_expecting(&env.child_env(), Some(kind))?;
+
                 if kind != val.kind
                 {
                     return err!(
                         span,
-                        "Cannot assign a value of type {:?} to a binding of type {:?}",
+                        "Cannot assign a value of type {} to a binding of type {}",
                         val.kind,
                         kind
                     );
@@ -223,15 +222,42 @@ impl<'a> Node<'a, Option<Annotation>>
                     .ok_or(err!(span, "Unknown binding {:?}", name).unwrap_err())
             }
 
+            Expr::Cast { val, kind } =>
+            {
+                let Some(kind) = Kind::from_str(kind)
+                else
+                {
+                    return err!(span, "Unknown type {:?}", kind);
+                };
+
+                let val = val.annotate_expecting(&env.child_env(), Some(kind))?.kind;
+
+                if !cast_compat(val, kind)
+                {
+                    return err!(span, "Cannot cast a value of type {} to {}", val, kind);
+                }
+
+                Ok(Annotation {
+                    kind,
+                    cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                })
+            }
+
             Expr::Chain(ast_nodes) =>
             {
                 let mut last_annotation = Annotation::default();
                 let mut chained_env = env.child_env();
 
-                for ast in ast_nodes
+                // Only the last expression of a chain determines its type
+                let last = ast_nodes.len().saturating_sub(1);
+
+                for (i, ast) in ast_nodes.iter_mut().enumerate()
                 {
                     chained_env = chained_env.child_env();
-                    last_annotation = ast.annotate(&chained_env)?;
+                    last_annotation = ast.annotate_expecting(
+                        &chained_env,
+                        if i == last { expected } else { None },
+                    )?;
                 }
 
                 Ok(last_annotation)
@@ -256,32 +282,5 @@ impl<'a> Node<'a, Option<Annotation>>
 
             e => e,
         }
-    }
-}
-
-
-//HACK: Replace this function with a proper lut
-fn binop_compat<'a>(op: &Binop, lhs: Kind, rhs: Kind, _env: &Env<'a, EnvEntry>) -> Option<Kind>
-{
-    match (op, lhs, rhs)
-    {
-        (Binop::Add, Kind::Num, Kind::Num) => Some(Kind::Num),
-        (Binop::Sub, Kind::Num, Kind::Num) => Some(Kind::Num),
-        (Binop::Div, Kind::Num, Kind::Num) => Some(Kind::Num),
-        (Binop::Mul, Kind::Num, Kind::Num) => Some(Kind::Num),
-        (Binop::Mod, Kind::Num, Kind::Num) => Some(Kind::Num),
-        (Binop::Pow, Kind::Num, Kind::Num) => Some(Kind::Num),
-        _ => None,
-    }
-}
-
-
-//HACK: Replace this function with a proper lut
-fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) -> Option<Kind>
-{
-    match (op, arg)
-    {
-        (Unaop::Neg, Kind::Num) => Some(Kind::Num),
-        _ => None,
     }
 }

@@ -3,7 +3,8 @@ use std::fmt;
 
 
 pub const KW_DECL: &str = "sett";
-pub const KW_NOP: &str = "nop";
+pub const KW_NOP: &str = "kop";
+pub const KW_AS: &str = "as";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -12,12 +13,14 @@ pub type Spanned<T> = (T, SimpleSpan);
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'src>
 {
-    Num(f64),
+    Num(u64),
+    Float(f64),
     Str(&'src str),
     Ident(&'src str),
 
     // Keywords
     Decl,
+    As,
     Nop,
 
     // Symbols
@@ -45,10 +48,12 @@ impl fmt::Display for Token<'_>
         match self
         {
             Token::Num(n) => write!(f, "{n}"),
+            Token::Float(n) => write!(f, "{n}f"),
             Token::Str(s) => write!(f, "\"{s}\""),
             Token::Ident(name) => write!(f, "{name}"),
             Token::Decl => write!(f, "{KW_DECL}"),
             Token::Nop => write!(f, "{KW_NOP}"),
+            Token::As => write!(f, "{KW_AS}"),
             Token::Semicolon => write!(f, ";"),
             Token::Doublecolon => write!(f, ":"),
             Token::Plus => write!(f, "+"),
@@ -101,7 +106,32 @@ fn whitespace<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, 
 pub fn lexer<'src>()
 -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>>
 {
-    let num = text::int(10).from_str().unwrapped().map(Token::Num);
+    let num = text::int(10)
+        .validate(|digits: &str, info, emitter| {
+            digits.parse().unwrap_or_else(|_| {
+                emitter.emit(Rich::custom(
+                    info.span(),
+                    format!("Integer literal {digits} is too large"),
+                ));
+                0
+            })
+        })
+        .map(Token::Num);
+
+    // Floats need an "f" suffix, e.g. "39f" or "3.5f"
+    let float = text::int(10)
+        .then(just('.').then(text::digits(10)).or_not())
+        .to_slice()
+        .then_ignore(just('f'))
+        // Make sure the "f" is not the start of an identifier, e.g. "39foo"
+        .then_ignore(
+            any()
+                .filter(|c: &char| c.is_alphanumeric() || *c == '_')
+                .not(),
+        )
+        .from_str()
+        .unwrapped()
+        .map(Token::Float);
 
     let string = one_of("\"'")
         .ignore_then(none_of("\"'").repeated().to_slice())
@@ -114,6 +144,7 @@ pub fn lexer<'src>()
         {
             KW_DECL => Token::Decl,
             KW_NOP => Token::Nop,
+            KW_AS => Token::As,
             _ => Token::Ident(ident),
         }
     });
@@ -135,7 +166,7 @@ pub fn lexer<'src>()
         just("=").to(Token::Eq),
     ));
 
-    let token = choice((num, string, ident, symbol))
+    let token = choice((float, num, string, ident, symbol))
         .map_with(|token, info| (token, info.span()))
         // Skip characters that do not start a valid token, so that the rest of the input can still be lexed
         .recover_with(skip_then_retry_until(any().ignored(), end()));

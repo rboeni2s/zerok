@@ -37,6 +37,12 @@ pub enum Expr<'src, D>
         name: &'src str,
     },
 
+    Cast
+    {
+        val: Box<Node<'src, D>>,
+        kind: &'src str,
+    },
+
     Chain(Vec<Node<'src, D>>),
 
     // Placeholder for a something that could not be parsed.
@@ -97,67 +103,30 @@ where
 
                 // Parse the different operators and set their associativity and precedence
                 operand.pratt((
-                    infix(left(0), Binop::add(), |lhs, op, rhs, info| {
+                    infix(
+                        left(0),
+                        Binop::add().or(Binop::sub()),
+                        |lhs, op, rhs, info| Self::binop(op, lhs, rhs, info.span()),
+                    ),
+                    infix(
+                        left(1),
+                        choice((Binop::mul(), Binop::div(), Binop::modulo())),
+                        |lhs, op, rhs, info| Self::binop(op, lhs, rhs, info.span()),
+                    ),
+                    infix(right(4), Binop::pow(), |lhs, op, rhs, info| {
+                        Self::binop(op, lhs, rhs, info.span())
+                    }),
+                    // "-a as u32" is "(-a) as u32" and "a * b as u32" is "a * (b as u32)"
+                    postfix(2, just(Token::As).ignore_then(ident), |val, kind, info| {
                         AstNode::new(
-                            Self::Binop {
-                                op,
-                                lhs: Box::new(lhs),
-                                rhs: Box::new(rhs),
+                            Self::Cast {
+                                val: Box::new(val),
+                                kind,
                             },
                             info.span(),
                         )
                     }),
-                    infix(left(0), Binop::sub(), |lhs, op, rhs, info| {
-                        AstNode::new(
-                            Self::Binop {
-                                op,
-                                lhs: Box::new(lhs),
-                                rhs: Box::new(rhs),
-                            },
-                            info.span(),
-                        )
-                    }),
-                    infix(left(1), Binop::mul(), |lhs, op, rhs, info| {
-                        AstNode::new(
-                            Self::Binop {
-                                op,
-                                lhs: Box::new(lhs),
-                                rhs: Box::new(rhs),
-                            },
-                            info.span(),
-                        )
-                    }),
-                    infix(left(1), Binop::div(), |lhs, op, rhs, info| {
-                        AstNode::new(
-                            Self::Binop {
-                                op,
-                                lhs: Box::new(lhs),
-                                rhs: Box::new(rhs),
-                            },
-                            info.span(),
-                        )
-                    }),
-                    infix(left(1), Binop::modulo(), |lhs, op, rhs, info| {
-                        AstNode::new(
-                            Self::Binop {
-                                op,
-                                lhs: Box::new(lhs),
-                                rhs: Box::new(rhs),
-                            },
-                            info.span(),
-                        )
-                    }),
-                    infix(right(3), Binop::pow(), |lhs, op, rhs, info| {
-                        AstNode::new(
-                            Self::Binop {
-                                op,
-                                lhs: Box::new(lhs),
-                                rhs: Box::new(rhs),
-                            },
-                            info.span(),
-                        )
-                    }),
-                    prefix(2, Unaop::neg(), |op, val, info| {
+                    prefix(3, Unaop::neg(), |op, val, info| {
                         AstNode::new(
                             Self::Unaop {
                                 op,
@@ -213,5 +182,17 @@ where
         );
 
         chain
+    }
+
+    fn binop(op: Binop, lhs: Node<'src, D>, rhs: Node<'src, D>, span: SimpleSpan) -> Node<'src, D>
+    {
+        AstNode::new(
+            Self::Binop {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            },
+            span,
+        )
     }
 }

@@ -6,6 +6,6 @@
     Kommentar
 */
 
-sett a: num = 10 + 5 * 2; // Ende der Zeile als Kommentar
-sett b: num = (kop; sett c: num = a) * a;
+sett a: u32 = 10 + 5 * 2; // Ende der Zeile als Kommentar
+sett b: i32 = (kop; sett c: i32 = a as i32) * a as i32;
 b

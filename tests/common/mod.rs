@@ -1,21 +1,30 @@
-pub use super::atom::Atom;
-pub use crate::chain;
-pub use crate::parser::Expr;
-pub use crate::parser::Node;
-pub use crate::parser::ops::{Binop, Unaop};
+//! Helpers to build expected asts in tests
+
+// Not every test file uses every helper
+#![allow(dead_code)]
+
+pub use zerok::parser::atom::Atom;
+pub use zerok::parser::ops::{Binop, Unaop};
+pub use zerok::parser::{Expr, Node};
 
 
-#[macro_export]
 macro_rules! chain {
     ($($e:expr),*) => {
-        Expr::Chain(vec![$($e),*]).into()
+        zerok::parser::Expr::Chain(vec![$($e),*]).into()
     };
+}
+pub(crate) use chain;
+
+
+pub fn num<'a, D: Default>(n: u64) -> Node<'a, D>
+{
+    Expr::Atom(Atom::Int(n)).into()
 }
 
 
-pub fn num<'a, D: Default>(n: impl Into<f64>) -> Node<'a, D>
+pub fn float<'a, D: Default>(n: f64) -> Node<'a, D>
 {
-    Expr::Atom(Atom::Num(n.into())).into()
+    Expr::Atom(Atom::Float(n)).into()
 }
 
 
@@ -37,6 +46,22 @@ pub fn decl<'a, D: Default>(name: &'a str, kind: &'a str, expr: Node<'a, D>) -> 
         name,
         kind,
         val: Box::new(expr),
+    }
+    .into()
+}
+
+
+pub fn binding<'a, D: Default>(name: &'a str) -> Node<'a, D>
+{
+    Expr::Binding { name }.into()
+}
+
+
+pub fn cast<'a, D: Default>(val: Node<'a, D>, kind: &'a str) -> Node<'a, D>
+{
+    Expr::Cast {
+        val: Box::new(val),
+        kind,
     }
     .into()
 }

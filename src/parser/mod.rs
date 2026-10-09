@@ -1,5 +1,4 @@
 pub mod ast;
-pub mod ast_builder;
 pub mod atom;
 pub mod expr;
 pub mod lexer;
@@ -7,11 +6,9 @@ pub mod ops;
 
 
 use anyhow::Context;
+pub use ast::Node;
 use chumsky::input::MappedInput;
 use chumsky::prelude::*;
-use std::{marker::PhantomData, range::Range};
-
-
 pub use expr::Expr;
 pub use lexer::{Spanned, Token};
 
@@ -27,9 +24,6 @@ impl<'t, 's: 't, T, I> P<'t, 's, T> for I where
     I: Parser<'t, TokenInput<'t, 's>, T, extra::Err<Rich<'t, Token<'s>>>> + Clone
 {
 }
-
-
-pub type Node<'a, D> = ast::AstNode<'a, Expr<'a, D>, D>;
 
 
 pub fn parse<'s, D>(src: &'s str, src_path: &str) -> anyhow::Result<Node<'s, D>>
