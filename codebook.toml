@@ -1,4 +1,7 @@
 words = [
+    "binop",
     "checken",
+    "lut",
     "nop",
+    "unaop",
 ]

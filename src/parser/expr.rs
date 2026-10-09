@@ -32,6 +32,11 @@ pub enum Expr<'src, D>
         val: Box<Node<'src, D>>,
     },
 
+    Binding
+    {
+        name: &'src str,
+    },
+
     Chain(Vec<Node<'src, D>>),
 
     // Placeholder for a something that could not be parsed.
@@ -66,11 +71,19 @@ where
                     .then(text::ident().padded())
                     .then_ignore(just(Synt::Eq.repr()).padded())
                     .then(term.clone())
-                    .map(|((name, kind), val)| Self::Decl {
-                        name,
-                        kind,
-                        val: Box::new(val),
+                    .map(|((name, kind), val)| {
+                        Self::Decl {
+                            name,
+                            kind,
+                            val: Box::new(val),
+                        }
                     })
+                    .map_with(|expr, span| AstNode::new(expr, span.span()));
+
+                // Check if this expression is a ident to a binding
+                let binding = text::ident()
+                    .padded()
+                    .map(|name| Self::Binding { name })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expressions is "geklammert"
@@ -80,7 +93,7 @@ where
                 );
 
                 // Operands to operators can either be an atom or a (chained) expression
-                let operand = atom.clone().or(parenthesized).or(decl);
+                let operand = atom.clone().or(parenthesized).or(decl).or(binding);
 
                 // Parse the different operators and set their associativity and precedence
                 operand.pratt((
@@ -177,18 +190,20 @@ where
         chain.define(
             expr_chain
                 .then(just(Synt::Semicolon.repr()).padded().or_not())
-                .map_with(|(mut chain, term), info| match term
-                {
-                    Some(_) =>
+                .map_with(|(mut chain, term), info| {
+                    match term
                     {
-                        if let Self::Chain(chain) = &mut chain
+                        Some(_) =>
                         {
-                            chain.push(Expr::Atom(Atom::Nop).into());
-                        }
+                            if let Self::Chain(chain) = &mut chain
+                            {
+                                chain.push(Expr::Atom(Atom::Nop).into());
+                            }
 
-                        AstNode::new(chain, info.span())
+                            AstNode::new(chain, info.span())
+                        }
+                        None => AstNode::new(chain, info.span()),
                     }
-                    None => AstNode::new(chain, info.span()),
                 })
                 // Try to skip malformed input in case of an error, so that the rest of the input can be checked
                 //TODO: This doesnt work, i should debug and fix this

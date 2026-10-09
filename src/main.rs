@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chumsky::error::Rich;
-use std::process::ExitCode;
+use std::{process::ExitCode, rc::Rc};
 use zerok::{
     annotator::{self, Annotation, EnvEntry},
     diagnostic,
@@ -30,7 +30,7 @@ fn run() -> Result<()>
         .context("Missing source file path")?;
 
     let source_file_content = std::fs::read_to_string(&source_file_path)?;
-    let env = annotator::Env::<EnvEntry>::default();
+    let env = Rc::new(annotator::Env::<EnvEntry>::default());
 
     let mut ast = parser::parse(
         Expr::<Option<Annotation>>::parser(),

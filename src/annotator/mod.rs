@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use chumsky::span::{SimpleSpan, Span};
-use std::sync::atomic::AtomicUsize;
+use std::{rc::Rc, sync::atomic::AtomicUsize};
 
 
 pub use crate::annotator::env::{Env, EnvEntry};
@@ -41,6 +41,21 @@ pub enum Kind
     Num,
     String,
     None,
+}
+
+
+impl Kind
+{
+    fn from_str(value: &str) -> Option<Self>
+    {
+        match value
+        {
+            "num" => Some(Kind::Num),
+            "string" => Some(Kind::String),
+            "none" => Some(Kind::None),
+            _ => None,
+        }
+    }
 }
 
 
@@ -90,8 +105,10 @@ impl<'a> Node<'a, Option<Annotation>>
         REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn annotate(&mut self, env: &Env<'a, EnvEntry>)
-    -> Result<Annotation, (SimpleSpan, String)>
+    pub fn annotate(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+    ) -> Result<Annotation, (SimpleSpan, String)>
     {
         let span = self.span;
         let annotation = match &mut self.inner
@@ -121,8 +138,8 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Binop { op, lhs, rhs } =>
             {
-                let lhs = lhs.annotate(env)?.kind;
-                let rhs = rhs.annotate(env)?.kind;
+                let lhs = lhs.annotate(&env.child_env())?.kind;
+                let rhs = rhs.annotate(&env.child_env())?.kind;
 
                 match binop_compat(op, lhs, rhs, env)
                 {
@@ -148,7 +165,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Unaop { op, val } =>
             {
-                let val = val.annotate(env)?.kind;
+                let val = val.annotate(&env.child_env())?.kind;
 
                 match unaop_compat(op, val, env)
                 {
@@ -166,16 +183,55 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Decl { name, kind, val } =>
             {
-                err!(span, "Declarations sind noch nicht implementiert")
+                let val = val.annotate(&env.child_env())?;
+
+                let Some(kind) = Kind::from_str(kind)
+                else
+                {
+                    return err!(span, "Unknown type {:?}", kind);
+                };
+
+                if kind != val.kind
+                {
+                    return err!(
+                        span,
+                        "Cannot assign a value of type {:?} to a binding of type {:?}",
+                        val.kind,
+                        kind
+                    );
+                }
+
+                let annotation = Annotation {
+                    kind,
+                    cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                };
+
+                env.bind_cell(name, &annotation);
+
+                Ok(annotation)
+            }
+
+            Expr::Binding { name } =>
+            {
+                env.fetch_bound(name)
+                    .map(|(kind, cell)| {
+                        Annotation {
+                            kind,
+                            cell: Some(cell),
+                        }
+                    })
+                    .ok_or(err!(span, "Unknown binding {:?}", name).unwrap_err())
             }
 
             Expr::Chain(ast_nodes) =>
             {
                 let mut last_annotation = Annotation::default();
+                let mut chained_env = env.child_env();
 
                 for ast in ast_nodes
                 {
-                    last_annotation = ast.annotate(env)?;
+                    chained_env = chained_env.child_env();
+                    last_annotation = ast.annotate(&chained_env)?;
                 }
 
                 Ok(last_annotation)
