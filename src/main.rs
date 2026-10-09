@@ -4,7 +4,7 @@ use std::{process::ExitCode, rc::Rc};
 use zerok::{
     annotator::{self, Annotation, EnvEntry},
     diagnostic,
-    parser::{self, Expr},
+    parser,
 };
 
 
@@ -32,11 +32,7 @@ fn run() -> Result<()>
     let source_file_content = std::fs::read_to_string(&source_file_path)?;
     let env = Rc::new(annotator::Env::<EnvEntry>::default());
 
-    let mut ast = parser::parse(
-        Expr::<Option<Annotation>>::parser(),
-        &source_file_content,
-        &source_file_path,
-    )?;
+    let mut ast = parser::parse::<Option<Annotation>>(&source_file_content, &source_file_path)?;
 
     // Annotate the ast
     if let Err((span, msg)) = ast.annotate(&env)
@@ -44,7 +40,7 @@ fn run() -> Result<()>
         diagnostic::print_err(
             &source_file_path,
             &source_file_content,
-            &Rich::custom(span, msg),
+            &Rich::<char>::custom(span, msg),
         )?;
 
         return Err(anyhow::anyhow!("Type Error"));

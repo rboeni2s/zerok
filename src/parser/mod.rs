@@ -2,87 +2,66 @@ pub mod ast;
 pub mod ast_builder;
 pub mod atom;
 pub mod expr;
+pub mod lexer;
 pub mod ops;
 
 
 use anyhow::Context;
+use chumsky::input::MappedInput;
 use chumsky::prelude::*;
 use std::{marker::PhantomData, range::Range};
 
 
 pub use expr::Expr;
+pub use lexer::{Spanned, Token};
 
 
-pub trait P<'a, T>: Parser<'a, &'a str, T, extra::Err<Rich<'a, char>>> + Clone {}
-impl<'a, T, I> P<'a, T> for I where I: Parser<'a, &'a str, T, extra::Err<Rich<'a, char>>> + Clone {}
+pub type TokenInput<'t, 's> = MappedInput<'t, Token<'s>, SimpleSpan, &'t [Spanned<Token<'s>>]>;
+
+
+pub trait P<'t, 's: 't, T>:
+    Parser<'t, TokenInput<'t, 's>, T, extra::Err<Rich<'t, Token<'s>>>> + Clone
+{
+}
+impl<'t, 's: 't, T, I> P<'t, 's, T> for I where
+    I: Parser<'t, TokenInput<'t, 's>, T, extra::Err<Rich<'t, Token<'s>>>> + Clone
+{
+}
 
 
 pub type Node<'a, D> = ast::AstNode<'a, Expr<'a, D>, D>;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Synt
-{
-    Semicolon,
-    Doublecolon,
-    Plus,
-    Star,
-    Nop,
-    Minus,
-    Slash,
-    LParen,
-    RParen,
-    Percent,
-    StarStar,
-    RBrace,
-    LBrace,
-    Comma,
-    Decl,
-    Eq,
-}
-
-
-impl Synt
-{
-    fn repr(&self) -> &'static str
-    {
-        match self
-        {
-            Synt::Semicolon => ";",
-            Synt::Nop => "nop",
-            Synt::Plus => "+",
-            Synt::Star => "*",
-            Synt::Minus => "-",
-            Synt::Slash => "/",
-            Synt::LParen => "(",
-            Synt::RParen => ")",
-            Synt::Percent => "%",
-            Synt::StarStar => "**",
-            Synt::Doublecolon => ":",
-            Synt::RBrace => "}",
-            Synt::LBrace => "{",
-            Synt::Comma => ",",
-            Synt::Decl => "decl",
-            Synt::Eq => "=",
-        }
-    }
-}
-
-
-pub fn parse<'a, D>(
-    parser: impl P<'a, Node<'a, D>>,
-    src: &'a str,
-    src_path: &str,
-) -> anyhow::Result<Node<'a, D>>
+pub fn parse<'s, D>(src: &'s str, src_path: &str) -> anyhow::Result<Node<'s, D>>
 where
-    D: Default + 'a,
+    D: Default + 's,
 {
-    let (ast, errors) = Expr::parser().parse(src).into_output_errors();
+    let (tokens, lex_errors) = lexer::lexer().parse(src).into_output_errors();
 
-    for err in &errors
+    for err in &lex_errors
     {
         crate::diagnostic::print_err(src_path, src, err)?;
     }
 
-    ast.context(format!("Parsing failed with {} error(s)", errors.len()))
+    let tokens = tokens.context(format!("Lexing failed with {} error(s)", lex_errors.len()))?;
+
+    let input_end = SimpleSpan::from(src.len()..src.len());
+    let (ast, parse_errors) = Expr::parser()
+        .parse(tokens.as_slice().split_token_span(input_end))
+        .into_output_errors();
+
+    for err in &parse_errors
+    {
+        crate::diagnostic::print_err(src_path, src, err)?;
+    }
+
+    if !lex_errors.is_empty()
+    {
+        anyhow::bail!("Lexing failed with {} error(s)", lex_errors.len());
+    }
+
+    ast.context(format!(
+        "Parsing failed with {} error(s)",
+        parse_errors.len()
+    ))
 }

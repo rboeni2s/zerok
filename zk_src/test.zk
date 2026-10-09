@@ -1,3 +1,11 @@
-decl a: num = 10 + 5 * 2;
-decl b: num = (decl c: num = a) * a;
+// Ganze Zeile als Kommentar
+
+/*
+    Mehrere Zeilen
+    als
+    Kommentar
+*/
+
+sett a: num = 10 + 5 * 2; // Ende der Zeile als Kommentar
+sett b: num = (kop; sett c: num = a) * a;
 b

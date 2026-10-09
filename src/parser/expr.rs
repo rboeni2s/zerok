@@ -2,7 +2,7 @@ use crate::parser::ast::AstNode;
 
 use super::atom::Atom;
 use super::ops::{Binop, Unaop};
-use super::{Node, P, Synt};
+use super::{Node, P, Token};
 use chumsky::pratt::*;
 use chumsky::prelude::*;
 
@@ -48,13 +48,16 @@ impl<'src, D> Expr<'src, D>
 where
     D: Default + 'src,
 {
-    pub fn parser() -> impl P<'src, Node<'src, D>>
+    pub fn parser<'t>() -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
     {
         // Create the atom parser
         let atom = Atom::parser()
-            .padded()
             .map(Self::Atom)
             .map_with(|atom, span| Node::new(atom, span.span()));
+
+        let ident = select! { Token::Ident(name) => name }.labelled("identifier");
 
         // Split the recursive parser declaration of a expression chain into the declaration and definition part, to allow
         // building the term expression in between, this allows for complex expressions to be chained with the correct chaining precedence
@@ -64,12 +67,11 @@ where
             let chain = chain.clone();
             move |term| {
                 // Check if this expression is a declaration
-                let decl = just(Synt::Decl.repr())
-                    .padded()
-                    .ignore_then(text::ident().padded())
-                    .then_ignore(just(Synt::Doublecolon.repr()).padded())
-                    .then(text::ident().padded())
-                    .then_ignore(just(Synt::Eq.repr()).padded())
+                let decl = just(Token::Decl)
+                    .ignore_then(ident)
+                    .then_ignore(just(Token::Doublecolon))
+                    .then(ident)
+                    .then_ignore(just(Token::Eq))
                     .then(term.clone())
                     .map(|((name, kind), val)| {
                         Self::Decl {
@@ -81,16 +83,14 @@ where
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expression is a ident to a binding
-                let binding = text::ident()
-                    .padded()
+                let binding = ident
                     .map(|name| Self::Binding { name })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expressions is "geklammert"
-                let parenthesized = chain.clone().delimited_by(
-                    just(Synt::LParen.repr()).padded(),
-                    just(Synt::RParen.repr()).padded(),
-                );
+                let parenthesized = chain
+                    .clone()
+                    .delimited_by(just(Token::LParen), just(Token::RParen));
 
                 // Operands to operators can either be an atom or a (chained) expression
                 let operand = atom.clone().or(parenthesized).or(decl).or(binding);
@@ -172,7 +172,7 @@ where
 
         // Chain terms separated by ";"
         let expr_chain = term
-            .separated_by(just(Synt::Semicolon.repr()).padded())
+            .separated_by(just(Token::Semicolon))
             .collect::<Vec<_>>()
             .map(Self::Chain);
 
@@ -180,8 +180,8 @@ where
         // This is used for error recovery on malformed input
         let terminator = || {
             choice((
-                just(Synt::Semicolon.repr()).ignored(),
-                just(Synt::RParen.repr()).ignored(),
+                just(Token::Semicolon).ignored(),
+                just(Token::RParen).ignored(),
                 end(),
             ))
         };
@@ -189,7 +189,7 @@ where
         // Check if the expression chain ends in ";" and add a nop node if it does
         chain.define(
             expr_chain
-                .then(just(Synt::Semicolon.repr()).padded().or_not())
+                .then(just(Token::Semicolon).or_not())
                 .map_with(|(mut chain, term), info| {
                     match term
                     {

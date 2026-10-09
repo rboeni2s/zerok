@@ -1,4 +1,4 @@
-use super::{P, Synt};
+use super::{P, Token};
 use chumsky::prelude::*;
 
 
@@ -11,22 +11,15 @@ pub enum Atom
 }
 
 
-impl<'src> Atom
+impl Atom
 {
-    pub fn parser() -> impl P<'src, Self>
+    pub fn parser<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        let string = one_of("\"'")
-            .ignore_then(none_of("\"'").repeated().collect::<String>())
-            .then_ignore(one_of("\"'"))
-            .padded()
-            .map(Self::Str);
-
-        let num = text::int(10).padded().from_str().unwrapped().map(Self::Num);
-
-        choice((
-            string,
-            num,
-            just(Synt::Nop.repr()).padded().map(|_| Self::Nop),
-        ))
+        select! {
+            Token::Str(s) => Self::Str(s.to_string()),
+            Token::Num(n) => Self::Num(n),
+            Token::Nop => Self::Nop,
+        }
+        .labelled("value")
     }
 }

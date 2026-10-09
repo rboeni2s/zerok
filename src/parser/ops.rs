@@ -1,4 +1,4 @@
-use super::{P, Synt};
+use super::{P, Token};
 use chumsky::prelude::*;
 
 
@@ -14,36 +14,36 @@ pub enum Binop
 }
 
 
-impl<'src> Binop
+impl Binop
 {
-    pub fn add() -> impl P<'src, Self>
+    pub fn add<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::Plus.repr()).to(Self::Add)
+        just(Token::Plus).to(Self::Add)
     }
 
-    pub fn sub() -> impl P<'src, Self>
+    pub fn sub<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::Minus.repr()).to(Self::Sub)
+        just(Token::Minus).to(Self::Sub)
     }
 
-    pub fn mul() -> impl P<'src, Self>
+    pub fn mul<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::Star.repr()).to(Self::Mul)
+        just(Token::Star).to(Self::Mul)
     }
 
-    pub fn div() -> impl P<'src, Self>
+    pub fn div<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::Slash.repr()).to(Self::Div)
+        just(Token::Slash).to(Self::Div)
     }
 
-    pub fn modulo() -> impl P<'src, Self>
+    pub fn modulo<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::Percent.repr()).to(Self::Mod)
+        just(Token::Percent).to(Self::Mod)
     }
 
-    pub fn pow() -> impl P<'src, Self>
+    pub fn pow<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::StarStar.repr()).to(Self::Pow)
+        just(Token::StarStar).to(Self::Pow)
     }
 }
 
@@ -55,10 +55,10 @@ pub enum Unaop
 }
 
 
-impl<'src> Unaop
+impl Unaop
 {
-    pub fn neg() -> impl P<'src, Self>
+    pub fn neg<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
-        just(Synt::Minus.repr()).padded().to(Self::Neg)
+        just(Token::Minus).to(Self::Neg)
     }
 }
