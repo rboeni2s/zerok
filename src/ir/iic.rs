@@ -77,7 +77,7 @@ impl ToIIC for EnvEntry
         match self
         {
             EnvEntry::Register(reg) => format!("R{reg}"),
-            EnvEntry::Atom(atom) =>
+            EnvEntry::Atom { atom, .. } =>
             {
                 match atom
                 {

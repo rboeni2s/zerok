@@ -4,6 +4,7 @@ mod iic;
 
 
 pub use builder::IrBuilder;
+pub use gen_ir::generate_ir;
 pub use iic::ToIIC;
 
 

@@ -117,7 +117,10 @@ impl<'a> Node<'a, Option<Annotation>>
 
                         Ok(Annotation {
                             kind,
-                            cell: Some(env.reserve_and_put(EnvEntry::Atom(atom.clone()))),
+                            cell: Some(env.reserve_and_put(EnvEntry::Atom {
+                                atom: atom.clone(),
+                                reg: Self::reg(),
+                            })),
                         })
                     }
                 }
@@ -212,7 +215,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Binding { name } =>
             {
-                env.fetch_bound(name)
+                env.fetch_bound_cell(name)
                     .map(|(kind, cell)| {
                         Annotation {
                             kind,

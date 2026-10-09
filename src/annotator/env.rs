@@ -125,6 +125,26 @@ impl<'a, T> Env<'a, T>
         cell
     }
 
+    /// Tries to get a env entry
+    pub fn get(&self, cell: usize) -> Result<Option<T>>
+    where
+        T: Clone,
+    {
+        self.store.read(cell)
+    }
+
+    /// Tries to get a env entry, panics if it fails
+    pub fn get_unchecked(&self, cell: Option<usize>) -> T
+    where
+        T: Clone,
+    {
+        self.store
+            .read(cell.expect("There should be a cell int the store"))
+            .expect("Reading the store should not fail")
+            .expect("There should be a value in the store")
+    }
+
+
     /// Creates child environment of `Self`
     pub fn child_env(self: &Rc<Self>) -> Rc<Self>
     {
@@ -150,7 +170,7 @@ impl<'a, T> Env<'a, T>
     }
 
     /// Gets the store cell `name`
-    pub fn fetch_bound(&self, name: &str) -> Option<(Kind, usize)>
+    pub fn fetch_bound_cell(&self, name: &str) -> Option<(Kind, usize)>
     {
         match self.ident_stack.borrow().get(name).copied()
         {
@@ -159,7 +179,7 @@ impl<'a, T> Env<'a, T>
             {
                 match &self.parent
                 {
-                    Some(parent) => parent.fetch_bound(name),
+                    Some(parent) => parent.fetch_bound_cell(name),
                     None => None,
                 }
             }
@@ -171,6 +191,11 @@ impl<'a, T> Env<'a, T>
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnvEntry
 {
-    Atom(Atom),
+    Atom
+    {
+        atom: Atom,
+        reg: usize,
+    },
+
     Register(usize),
 }

@@ -4,6 +4,7 @@ use std::{process::ExitCode, rc::Rc};
 use zerok::{
     annotator::{self, Annotation, EnvEntry},
     diagnostic,
+    ir::{ToIIC, generate_ir},
     parser,
 };
 
@@ -46,7 +47,10 @@ fn run() -> Result<()>
         return Err(anyhow::anyhow!("Type Error"));
     }
 
-    dbg!(ast);
+    dbg!(&ast);
+
+    let ir = generate_ir(ast, &env);
+    println!("{}", ir.to_iic());
 
     Ok(())
 }

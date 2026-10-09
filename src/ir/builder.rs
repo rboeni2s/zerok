@@ -17,33 +17,33 @@ impl IrBuilder
         self
     }
 
-    pub fn binop(&mut self, op: IrOp, lhs: &EnvEntry, rhs: &EnvEntry, reg: usize) -> &mut Self
+    pub fn binop(&mut self, op: IrOp, lhs: EnvEntry, rhs: EnvEntry, reg: usize) -> &mut Self
     {
         self.chunks.push(IrChunk::Bin {
             op,
-            lhs: lhs.clone(),
-            rhs: rhs.clone(),
+            lhs,
+            rhs,
             reg: IrReg::R(reg),
         });
 
         self
     }
 
-    pub fn unaop(&mut self, op: IrOp, arg: &EnvEntry, reg: usize) -> &mut Self
+    pub fn unaop(&mut self, op: IrOp, arg: EnvEntry, reg: usize) -> &mut Self
     {
         self.chunks.push(IrChunk::Una {
             op,
-            arg: arg.clone(),
+            arg,
             reg: IrReg::R(reg),
         });
 
         self
     }
 
-    pub fn bind(&mut self, val: &EnvEntry, reg: usize) -> &mut Self
+    pub fn bind(&mut self, val: EnvEntry, reg: usize) -> &mut Self
     {
         self.chunks.push(IrChunk::Bind {
-            val: val.clone(),
+            val,
             reg: IrReg::R(reg),
         });
 
