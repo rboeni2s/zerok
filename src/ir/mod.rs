@@ -37,6 +37,7 @@ pub enum IrReg
 }
 
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrChunk
 {
     Bin

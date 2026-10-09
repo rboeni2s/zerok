@@ -117,7 +117,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                         Ok(Annotation {
                             kind,
-                            cell: Some(env.reserve_and_put(EnvEntry::Atom {
+                            cell: Some(env.put(EnvEntry::Atom {
                                 atom: atom.clone(),
                                 reg: Self::reg(),
                             })),
@@ -149,7 +149,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         Ok(Annotation {
                             kind: ret,
-                            cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                            cell: Some(env.put(EnvEntry::Register(Self::reg()))),
                         })
                     }
                     None =>
@@ -175,7 +175,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         Ok(Annotation {
                             kind: ret,
-                            cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                            cell: Some(env.put(EnvEntry::Register(Self::reg()))),
                         })
                     }
 
@@ -205,7 +205,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 let annotation = Annotation {
                     kind,
-                    cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                    cell: Some(env.put(EnvEntry::Register(Self::reg()))),
                 };
 
                 env.bind_cell(name, &annotation);
@@ -242,7 +242,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 Ok(Annotation {
                     kind,
-                    cell: Some(env.reserve_and_put(EnvEntry::Register(Self::reg()))),
+                    cell: Some(env.put(EnvEntry::Register(Self::reg()))),
                 })
             }
 

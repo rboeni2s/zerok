@@ -1,12 +1,4 @@
-use anyhow::{Context, Result, anyhow};
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    num::NonZero,
-    rc::Rc,
-    str::EncodeUtf16,
-    sync::atomic::AtomicUsize,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     annotator::{Annotation, Kind},
@@ -14,78 +6,53 @@ use crate::{
 };
 
 
-#[derive(Default)]
 pub struct Store<T>
 {
-    mem: RefCell<HashMap<usize, Option<T>>>,
-    freed: RefCell<Vec<usize>>,
-    next_addr: AtomicUsize,
+    mem: RefCell<Vec<T>>,
+}
+
+
+impl<T> Default for Store<T>
+{
+    fn default() -> Self
+    {
+        Self {
+            mem: Default::default(),
+        }
+    }
 }
 
 
 impl<T> Store<T>
 {
-    /// Writes to `val` to  `cell` returning the previous value. Fails if `cell` does not exist
-    pub fn write(&self, cell: usize, val: T) -> Result<Option<T>>
+    /// Puts `val` into a new cell and returns the cell
+    pub fn put(&self, val: T) -> usize
     {
-        if !self.mem.borrow().contains_key(&cell)
-        {
-            return Err(anyhow!("Invalid cell {cell:?}"));
-        }
-
-        Ok(self.mem.borrow_mut().insert(cell, Some(val)).flatten())
+        let mut mem = self.mem.borrow_mut();
+        mem.push(val);
+        mem.len() - 1
     }
 
-    /// Reserves one cell and returns its address
-    pub fn reserve_one(&self) -> usize
-    {
-        self.next_addr
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    }
-
-    /// Reserves `n` cells and returns the first address
-    pub fn reserve_many(&self, n: NonZero<usize>) -> usize
-    {
-        self.next_addr
-            .fetch_add(n.into(), std::sync::atomic::Ordering::Relaxed)
-    }
-
-    /// Reads from `cell`, fails if `cell` does not exist
-    pub fn read(&self, cell: usize) -> Result<Option<T>>
+    /// Reads the value of `cell`, returns `None` if the cell does not exist
+    pub fn get(&self, cell: usize) -> Option<T>
     where
         T: Clone,
     {
-        if self.mem.borrow().contains_key(&cell)
-        {
-            return Err(anyhow!("Invalid cell {cell:?}"));
-        }
-
-        Ok(match self.mem.borrow().get(&cell)
-        {
-            Some(Some(val)) => Some(val.clone()),
-            _ => None,
-        })
+        self.mem.borrow().get(cell).cloned()
     }
+}
 
-    #[deprecated = "Einfach durchnummerieren anstatt irgendwas wieder frei zu machen..."]
-    pub fn free_cell(&self, cell: usize)
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnvEntry
+{
+    Atom
     {
-        self.freed.borrow_mut().push(cell);
-    }
+        atom: Atom,
+        reg: usize,
+    },
 
-    // Fetches the next free address
-    fn next_addr(&self) -> usize
-    {
-        match self.freed.borrow_mut().pop()
-        {
-            Some(addr) => addr,
-            None =>
-            {
-                self.next_addr
-                    .fetch_and(1, std::sync::atomic::Ordering::Relaxed)
-            }
-        }
-    }
+    Register(usize),
 }
 
 
@@ -103,12 +70,7 @@ impl<'a, T> Default for Env<'a, T>
     {
         Self {
             ident_stack: Default::default(),
-            store: Store {
-                mem: Default::default(),
-                freed: Default::default(),
-                next_addr: Default::default(),
-            }
-            .into(),
+            store: Default::default(),
             parent: None,
         }
     }
@@ -117,31 +79,29 @@ impl<'a, T> Default for Env<'a, T>
 
 impl<'a, T> Env<'a, T>
 {
-    /// Reserves one entry in the store, write `entry` to it and then returns its cell index
-    pub fn reserve_and_put(&self, entry: T) -> usize
+    /// Puts `entry` into a new store cell and returns the cell
+    pub fn put(&self, entry: T) -> usize
     {
-        let cell = self.store.reserve_one();
-        self.store.write(cell, entry);
-        cell
+        self.store.put(entry)
     }
 
-    /// Tries to get a env entry
-    pub fn get(&self, cell: usize) -> Result<Option<T>>
+    /// Gets the entry of `cell`, returns `None` if the cell does not exist
+    pub fn get(&self, cell: usize) -> Option<T>
     where
         T: Clone,
     {
-        self.store.read(cell)
+        self.store.get(cell)
     }
 
-    /// Tries to get a env entry, panics if it fails
+    /// Gets the entry of `cell`, panics if there is no cell or it does not exist
     pub fn get_unchecked(&self, cell: Option<usize>) -> T
     where
         T: Clone,
     {
-        self.store
-            .read(cell.expect("There should be a cell int the store"))
-            .expect("Reading the store should not fail")
-            .expect("There should be a value in the store")
+        let cell = cell.expect("Trying to read an entry without a cell");
+
+        self.get(cell)
+            .unwrap_or_else(|| panic!("Cell {cell} does not exist in the store"))
     }
 
 
@@ -185,17 +145,4 @@ impl<'a, T> Env<'a, T>
             }
         }
     }
-}
-
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum EnvEntry
-{
-    Atom
-    {
-        atom: Atom,
-        reg: usize,
-    },
-
-    Register(usize),
 }

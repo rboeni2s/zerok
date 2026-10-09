@@ -7,12 +7,12 @@ use crate::{
 };
 
 
-pub fn generate_ir<'a>(expr: Ast<'a>, env: &Env<'a>) -> Vec<IrChunk>
+pub fn generate_ir<'a>(expr: &Ast<'a>, env: &Env<'a>) -> Vec<IrChunk>
 {
     let mut builder = IrBuilder::default();
     builder.func("main", &[]);
 
-    generate_expr_ir(&expr, env, &mut builder);
+    generate_expr_ir(expr, env, &mut builder);
 
     builder.build()
 }
@@ -29,7 +29,7 @@ fn generate_expr_ir<'a>(expr: &Ast<'a>, env: &Env<'a>, ir: &mut IrBuilder)
     {
         Expr::Atom(atom) =>
         {
-            if matches!(Atom::Nop, atom)
+            if matches!(atom, Atom::Nop)
             {
                 return;
             }

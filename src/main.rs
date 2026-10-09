@@ -47,9 +47,12 @@ fn run() -> Result<()>
         return Err(anyhow::anyhow!("Type Error"));
     }
 
-    dbg!(&ast);
 
-    let ir = generate_ir(ast, &env);
+    let ir = generate_ir(&ast, &env);
+
+    dbg!(&ast);
+    dbg!(&ir);
+
     println!("{}", ir.to_iic());
 
     Ok(())
