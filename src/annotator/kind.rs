@@ -18,6 +18,7 @@ pub enum Kind
     F64,
     String,
     None,
+    Bool,
 }
 
 
@@ -36,6 +37,7 @@ impl Kind
             "f64" => Some(Kind::F64),
             "string" => Some(Kind::String),
             "none" => Some(Kind::None),
+            "bool" => Some(Kind::Bool),
             _ => None,
         }
     }
@@ -68,6 +70,7 @@ impl Kind
             Atom::Str(_) => Kind::String,
             Atom::Int(_) => expected.filter(|kind| kind.is_int()).unwrap_or(Kind::I32),
             Atom::Float(_) => expected.filter(|kind| kind.is_float()).unwrap_or(Kind::F32),
+            Atom::Bool(_) => Kind::Bool,
             Atom::Nop => Kind::None,
         }
     }
@@ -101,6 +104,7 @@ impl fmt::Display for Kind
             Kind::F64 => "f64",
             Kind::String => "string",
             Kind::None => "none",
+            Kind::Bool => "bool",
         };
 
         write!(f, "{name}")

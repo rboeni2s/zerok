@@ -206,3 +206,19 @@ fn none_values()
     assert_eq!(kind_of("sett x: none = keenop; x"), Ok(Kind::None));
     assert!(check_program("op main() -> none { geve keenop }").is_ok());
 }
+
+
+#[test]
+fn booleans()
+{
+    assert_eq!(kind_of("ja"), Ok(Kind::Bool));
+    assert_eq!(kind_of("sett b: bool = nee; b"), Ok(Kind::Bool));
+    assert!(check_program("op f(b: bool) -> bool { b } op main() { f(ja); }").is_ok());
+
+    // Booleans are not numbers
+    assert!(kind_of("sett b: i32 = ja").is_err());
+    assert!(kind_of("sett b: bool = 1").is_err());
+    assert!(kind_of("ja + nee").is_err());
+    assert!(kind_of("-ja").is_err());
+    assert!(kind_of("ja as i32").is_err());
+}

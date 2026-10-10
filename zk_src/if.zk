@@ -1,0 +1,6 @@
+op main() -> u32
+{
+    wenn ja {39}
+    wenn anners ja {40}
+    anners ja {41}
+}

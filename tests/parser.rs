@@ -268,3 +268,21 @@ fn returns()
     assert!(parse("sett geve: i32 = 1").is_err());
     assert_eq!(parse("geves").unwrap(), chain![binding("geves")]);
 }
+
+
+#[test]
+fn booleans()
+{
+    assert_eq!(parse("ja; nee").unwrap(), chain![boolean(true), boolean(false)]);
+    assert_eq!(
+        parse("sett b: bool = ja").unwrap(),
+        chain![decl("b", "bool", boolean(true))]
+    );
+
+    // "ja" and "nee" are keywords, but prefixes of identifiers are not
+    assert!(parse("sett ja: bool = nee").is_err());
+    assert_eq!(
+        parse("jaa; neee").unwrap(),
+        chain![binding("jaa"), binding("neee")]
+    );
+}

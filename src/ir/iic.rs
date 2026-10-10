@@ -104,6 +104,7 @@ impl ToIIC for EnvEntry
                     }
                     Atom::Int(num) => num.to_string(),
                     Atom::Float(num) => (*num as u64).to_string(),
+                    Atom::Bool(b) => u64::from(*b).to_string(),
                     Atom::Nop => unreachable!("Für ein nop sollte nie code generiert werden"),
                 }
             }

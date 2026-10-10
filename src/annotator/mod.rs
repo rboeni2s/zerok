@@ -17,7 +17,7 @@ use crate::{
 };
 use chumsky::span::SimpleSpan;
 use kind::{binop_compat, cast_compat, unaop_compat};
-use std::{rc::Rc, sync::atomic::AtomicUsize};
+use std::{fmt, rc::Rc, sync::atomic::AtomicUsize};
 
 
 pub use env::{Env, EnvEntry};
@@ -84,6 +84,95 @@ impl<'a> Node<'a, Option<Annotation>>
 
             _ => false,
         }
+    }
+
+    /// Annotates the nodes of a chain in `env`, without opening a new scope.
+    /// Every node can see the bindings of the nodes before it, a later binding with the same name shadows the earlier one
+    fn annotate_chain(
+        ast_nodes: &mut [Self],
+        env: &Rc<Env<'a, EnvEntry>>,
+        expected: Option<Kind>,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        let mut last_annotation = Annotation::default();
+
+        // Only the last expression of a chain determines its type
+        let last = ast_nodes.len().saturating_sub(1);
+
+        for (i, ast) in ast_nodes.iter_mut().enumerate()
+        {
+            last_annotation =
+                ast.annotate_expecting(env, if i == last { expected } else { None })?;
+        }
+
+        Ok(last_annotation)
+    }
+
+    /// Annotates this node, but if it is a chain it does not open its own scope, so its bindings stay visible in `env`.
+    /// This is used for the conditions of if statements, e.g. "wenn sett x: u32 = 5; c { x }"
+    fn annotate_in_scope(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+        expected: Option<Kind>,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        let Expr::Chain(ast_nodes) = &mut self.inner
+        else
+        {
+            return self.annotate_expecting(env, expected);
+        };
+
+        let annotation = Self::annotate_chain(ast_nodes, env, expected)?;
+        self.data = Some(annotation);
+        Ok(annotation)
+    }
+
+    /// Annotates this node and makes sure it has the type `kind`, `what` describes the node in the error message
+    fn annotate_as(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+        kind: Kind,
+        what: impl fmt::Display,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        let annotation = self.annotate_expecting(env, Some(kind))?;
+
+        if annotation.kind != kind
+        {
+            return err!(
+                self.span,
+                "{} has to be of type {}, but is of type {}",
+                what,
+                kind,
+                annotation.kind
+            );
+        }
+
+        Ok(annotation)
+    }
+
+    /// Like `annotate_as`, but a chain does not open its own scope, see `annotate_in_scope`
+    fn annotate_in_scope_as(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+        kind: Kind,
+        what: impl fmt::Display,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        let annotation = self.annotate_in_scope(env, Some(kind))?;
+
+        if annotation.kind != kind
+        {
+            return err!(
+                self.span,
+                "{} has to be of type {}, but is of type {}",
+                what,
+                kind,
+                annotation.kind
+            );
+        }
+
+        Ok(annotation)
     }
 
     pub fn annotate(
@@ -200,17 +289,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     return err!(span, "Unknown type {:?}", kind);
                 };
 
-                let val = val.annotate_expecting(&env.child_env(), Some(kind))?;
-
-                if kind != val.kind
-                {
-                    return err!(
-                        span,
-                        "Cannot assign a value of type {} to a binding of type {}",
-                        val.kind,
-                        kind
-                    );
-                }
+                val.annotate_as(&env.child_env(), kind, format!("The value of {name:?}"))?;
 
                 let annotation = Annotation {
                     kind,
@@ -262,25 +341,8 @@ impl<'a> Node<'a, Option<Annotation>>
                 })
             }
 
-            Expr::Chain(ast_nodes) =>
-            {
-                let mut last_annotation = Annotation::default();
-                let mut chained_env = env.child_env();
-
-                // Only the last expression of a chain determines its type
-                let last = ast_nodes.len().saturating_sub(1);
-
-                for (i, ast) in ast_nodes.iter_mut().enumerate()
-                {
-                    chained_env = chained_env.child_env();
-                    last_annotation = ast.annotate_expecting(
-                        &chained_env,
-                        if i == last { expected } else { None },
-                    )?;
-                }
-
-                Ok(last_annotation)
-            }
+            // A chain has its own scope, so its bindings are not visible after it
+            Expr::Chain(ast_nodes) => Self::annotate_chain(ast_nodes, &env.child_env(), expected),
 
             Expr::Call { name, args } =>
             {
@@ -301,22 +363,13 @@ impl<'a> Node<'a, Option<Annotation>>
                     );
                 }
 
-                // Check the arguments
-                for (arg, param) in args.iter_mut().zip(params)
+                for (i, (arg, param)) in args.iter_mut().zip(params).enumerate()
                 {
-                    // Expect the type of the argument so numbers can become the right type
-                    let arg_kind = arg.annotate_expecting(&env.child_env(), Some(param))?.kind;
-
-                    if arg_kind != param
-                    {
-                        return err!(
-                            arg.span,
-                            "Cannot pass a value of type {} to a parameter of type {} of {:?}",
-                            arg_kind,
-                            param,
-                            name
-                        );
-                    }
+                    arg.annotate_as(
+                        &env.child_env(),
+                        param,
+                        format!("Argument {} of {:?}", i + 1, name),
+                    )?;
                 }
 
                 // Every call gets a register, even if the function does not return anything (it then returns 0)
@@ -334,29 +387,74 @@ impl<'a> Node<'a, Option<Annotation>>
                     return err!(span, "Cannot return outside of a function");
                 };
 
-                // A return without a value returns nothing
                 let val = match val
                 {
-                    Some(val) => val.annotate_expecting(&env.child_env(), Some(ret))?,
-                    None => Annotation::default(),
-                };
+                    Some(val) => val.annotate_as(&env.child_env(), ret, "The returned value")?,
 
-                if val.kind != ret
-                {
-                    return err!(
-                        span,
-                        "Cannot return a value of type {} from a function that returns {}",
-                        val.kind,
-                        ret
-                    );
-                }
+                    // A return without a value returns nothing
+                    None if ret == Kind::None => Annotation::default(),
+                    None =>
+                    {
+                        return err!(span, "A function returning {} has to return a value", ret);
+                    }
+                };
 
                 // A return takes the type and cell of its value, so a body ending in a return has the right type
                 Ok(val)
             }
 
-            //TODO: Typecheck if statements
-            Expr::If { .. } => err!(span, "If statements are not supported yet"),
+            Expr::If {
+                condition,
+                body,
+                elifs,
+                else_body,
+            } =>
+            {
+                // Without an else there is no value if no condition is true, so the if does not have a value then
+                let has_else = else_body.is_some();
+                let expected = if has_else { expected } else { None };
+
+                // The bindings of a condition are visible in its body and in all later branches, but not after the if
+                let mut scope = env.child_env();
+
+                condition.annotate_in_scope_as(&scope, Kind::Bool, "The condition")?;
+
+                let kind = body.annotate_expecting(&scope.child_env(), expected)?.kind;
+
+                // Each elif sees the bindings of all conditions before it
+                for (elif_cond, elif_body) in elifs
+                {
+                    scope = scope.child_env();
+
+                    elif_cond.annotate_in_scope_as(&scope, Kind::Bool, "The condition")?;
+
+                    // Without an else the values of the branches are not used, so their types do not matter
+                    if has_else
+                    {
+                        elif_body.annotate_as(&scope.child_env(), kind, "This branch of the if")?;
+                    }
+                    else
+                    {
+                        elif_body.annotate_expecting(&scope.child_env(), Some(kind))?;
+                    }
+                }
+
+                match else_body
+                {
+                    None => Ok(Annotation::default()),
+
+                    Some(else_body) =>
+                    {
+                        else_body.annotate_as(&scope.child_env(), kind, "This branch of the if")?;
+
+                        // Every branch writes its value into the register of the if
+                        Ok(Annotation {
+                            kind,
+                            cell: (kind != Kind::None).then(|| new_register(env)),
+                        })
+                    }
+                }
+            }
 
             Expr::ParseError =>
             {

@@ -28,6 +28,12 @@ pub fn float<'a, D: Default>(n: f64) -> Node<'a, D>
 }
 
 
+pub fn boolean<'a, D: Default>(b: bool) -> Node<'a, D>
+{
+    Expr::Atom(Atom::Bool(b)).into()
+}
+
+
 pub fn nop<'a, D: Default>() -> Node<'a, D>
 {
     Expr::Atom(Atom::Nop).into()

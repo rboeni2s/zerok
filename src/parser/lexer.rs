@@ -9,6 +9,8 @@ pub const KW_FN: &str = "op";
 pub const KW_RET: &str = "geve";
 pub const KW_IF: &str = "wenn";
 pub const KW_ELSE: &str = "anners";
+pub const KW_TRUE: &str = "ja";
+pub const KW_FALSE: &str = "nee";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -19,6 +21,7 @@ pub enum Token<'src>
 {
     Num(u64),
     Float(f64),
+    Bool(bool),
     Str(&'src str),
     Ident(&'src str),
 
@@ -58,6 +61,8 @@ impl fmt::Display for Token<'_>
         {
             Token::Num(n) => write!(f, "{n}"),
             Token::Float(n) => write!(f, "{n}f"),
+            Token::Bool(true) => write!(f, "{KW_TRUE}"),
+            Token::Bool(false) => write!(f, "{KW_FALSE}"),
             Token::Str(s) => write!(f, "\"{s}\""),
             Token::Ident(name) => write!(f, "{name}"),
             Token::Decl => write!(f, "{KW_DECL}"),
@@ -163,6 +168,8 @@ pub fn lexer<'src>()
             KW_RET => Token::Return,
             KW_IF => Token::If,
             KW_ELSE => Token::Else,
+            KW_TRUE => Token::Bool(true),
+            KW_FALSE => Token::Bool(false),
             _ => Token::Ident(ident),
         }
     });
