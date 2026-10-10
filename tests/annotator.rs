@@ -158,3 +158,37 @@ fn calls()
     assert!(check_program("op f() {} op main() -> i32 { f() + 1 }").is_err());
     assert!(check_program("op f() {} op main() { f() }").is_ok());
 }
+
+
+#[test]
+fn returns()
+{
+    assert!(check_program("op main() -> i32 { return 1 }").is_ok());
+    assert!(check_program("op main() -> i32 { return 1; }").is_ok());
+    assert!(check_program("op main() -> i32 { sett a: i32 = 1; return a; }").is_ok());
+    assert!(check_program("op main() { return }").is_ok());
+    assert!(check_program("op main() { return; }").is_ok());
+
+    // The returned value has to have the return type of the function
+    assert!(check_program("op main() -> i32 { return 1f }").is_err());
+    assert!(check_program("op main() -> i32 { sett a: u32 = 1; return a }").is_err());
+    assert!(check_program("op main() { return 1 }").is_err());
+    assert!(check_program("op main() -> i32 { return }").is_err());
+
+    // Literals take the return type of the function
+    assert!(check_program("op main() -> u64 { return 4000000000 }").is_ok());
+
+    // A return in the middle of a body does not change the type of the body
+    assert!(check_program("op main() -> i32 { return 1; 2 }").is_ok());
+    assert!(check_program("op main() -> i32 { return 1; 2f }").is_err());
+
+    // Returns inside of expressions
+    assert!(check_program("op main() -> i32 { 1 + return 2 }").is_ok());
+    assert!(check_program("op main() -> i32 { sett a: i32 = (return 1); a }").is_ok());
+
+    // Return types of other functions do not matter
+    assert!(check_program("op f() -> u64 { return 1 } op main() -> i32 { return 1 }").is_ok());
+
+    // There is no function to return from outside of functions
+    assert!(kind_of("return 1").is_err());
+}

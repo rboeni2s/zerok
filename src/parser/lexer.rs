@@ -6,6 +6,7 @@ pub const KW_DECL: &str = "sett";
 pub const KW_NOP: &str = "kop";
 pub const KW_AS: &str = "as";
 pub const KW_FN: &str = "op";
+pub const KW_RET: &str = "return";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -23,6 +24,7 @@ pub enum Token<'src>
     Decl,
     As,
     Fn,
+    Return,
     Nop,
 
     // Symbols
@@ -58,6 +60,7 @@ impl fmt::Display for Token<'_>
             Token::Nop => write!(f, "{KW_NOP}"),
             Token::As => write!(f, "{KW_AS}"),
             Token::Fn => write!(f, "{KW_FN}"),
+            Token::Return => write!(f, "{KW_RET}"),
             Token::Semicolon => write!(f, ";"),
             Token::Doublecolon => write!(f, ":"),
             Token::Arrow => write!(f, "->"),
@@ -151,6 +154,7 @@ pub fn lexer<'src>()
             KW_NOP => Token::Nop,
             KW_AS => Token::As,
             KW_FN => Token::Fn,
+            KW_RET => Token::Return,
             _ => Token::Ident(ident),
         }
     });

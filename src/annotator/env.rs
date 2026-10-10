@@ -62,6 +62,9 @@ pub struct Env<'a, T>
     bindings: RefCell<HashMap<&'a str, (Kind, usize)>>,
     functions: Rc<RefCell<HashMap<&'a str, (Kind, Vec<Kind>)>>>,
     store: Rc<Store<T>>,
+
+    /// The return type of the function this environment belongs to, `None` outside of functions
+    ret: Option<Kind>,
 }
 
 
@@ -74,6 +77,7 @@ impl<'a, T> Default for Env<'a, T>
             functions: Default::default(),
             store: Default::default(),
             parent: None,
+            ret: None,
         }
     }
 }
@@ -132,7 +136,26 @@ impl<'a, T> Env<'a, T>
             bindings: Default::default(),
             store: self.store.clone(),
             functions: self.functions.clone(),
+            ret: self.ret,
         })
+    }
+
+    /// Creates the child environment for the body of a function, which returns `ret`
+    pub fn function_env(self: &Rc<Self>, ret: Kind) -> Rc<Self>
+    {
+        Rc::new(Self {
+            parent: Some(self.clone()),
+            bindings: Default::default(),
+            store: self.store.clone(),
+            functions: self.functions.clone(),
+            ret: Some(ret),
+        })
+    }
+
+    /// The return type of the function this environment belongs to, `None` outside of functions
+    pub fn ret(&self) -> Option<Kind>
+    {
+        self.ret
     }
 
     /// Binds a store cell to a store entry

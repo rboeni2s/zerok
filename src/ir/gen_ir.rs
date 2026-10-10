@@ -152,6 +152,8 @@ fn generate_expr_ir<'a>(
             ir.call(*name, &args, register_of(expr, env));
         }
 
+        Expr::Return { .. } => todo!("Returns are not implemented in the ir yet"),
+
         Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
     }
 }

@@ -91,7 +91,7 @@ impl<'a> Function<'a, Option<Annotation>>
             .expect("The signature of a function has to be collected before its body is annotated");
 
         // Every function has its own env, so it can only see its own parameters
-        let fn_env = env.child_env();
+        let fn_env = env.function_env(ret);
 
         for (param, kind) in self.params.iter_mut().zip(params)
         {
@@ -115,7 +115,8 @@ impl<'a> Function<'a, Option<Annotation>>
 
         let body = self.body.annotate_expecting(&fn_env, Some(ret))?;
 
-        if body.kind != ret
+        // The value of a body that ends in a return is never used, e.g. "{ return 1; }"
+        if body.kind != ret && !self.body.ends_with_return()
         {
             return err!(
                 self.body.span,

@@ -49,6 +49,12 @@ pub enum Expr<'src, D>
         kind: &'src str,
     },
 
+    /// Returns from the current function, `val` is `None` if nothing is returned
+    Return
+    {
+        val: Option<Box<Node<'src, D>>>,
+    },
+
     Chain(Vec<Node<'src, D>>),
 
     // Placeholder for a something that could not be parsed.
@@ -94,6 +100,16 @@ where
                     })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
+                // Check if this expression is a return, the returned value is optional
+                let ret = just(Token::Return)
+                    .ignore_then(term.clone().or_not())
+                    .map(|val| {
+                        Self::Return {
+                            val: val.map(Box::new),
+                        }
+                    })
+                    .map_with(|expr, span| AstNode::new(expr, span.span()));
+
                 // Check if this expression is a function call, the arguments are separated by ","
                 let call = ident
                     .then(
@@ -117,7 +133,7 @@ where
                     .delimited_by(just(Token::LParen), just(Token::RParen));
 
                 // Operands to operators can either be an atom or a (chained) expression
-                let operand = atom.clone().or(parenthesized).or(decl).or(call).or(binding);
+                let operand = choice((atom.clone(), parenthesized, decl, ret, call, binding));
 
                 // Parse the different operators and set their associativity and precedence
                 operand.pratt((

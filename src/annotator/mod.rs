@@ -74,6 +74,31 @@ impl<'a> Node<'a, Option<Annotation>>
         }
     }
 
+    /// Returns true if this node ends in a return, e.g. "a; return b;", so its own value is never used
+    fn ends_with_return(&self) -> bool
+    {
+        match &self.inner
+        {
+            Expr::Return { .. } => true,
+
+            // A chain ending in ";" has a nop as its last element
+            Expr::Chain(ast_nodes) =>
+            {
+                match ast_nodes.as_slice()
+                {
+                    [.., last, nop] if matches!(nop.inner, Expr::Atom(Atom::Nop)) =>
+                    {
+                        last.ends_with_return()
+                    }
+                    [.., last] => last.ends_with_return(),
+                    [] => false,
+                }
+            }
+
+            _ => false,
+        }
+    }
+
     pub fn annotate(
         &mut self,
         env: &Rc<Env<'a, EnvEntry>>,
@@ -307,6 +332,35 @@ impl<'a> Node<'a, Option<Annotation>>
                     kind: ret,
                     cell: Some(new_register(env)),
                 })
+            }
+
+            Expr::Return { val } =>
+            {
+                let Some(ret) = env.ret()
+                else
+                {
+                    return err!(span, "Cannot return outside of a function");
+                };
+
+                // A return without a value returns nothing
+                let val = match val
+                {
+                    Some(val) => val.annotate_expecting(&env.child_env(), Some(ret))?,
+                    None => Annotation::default(),
+                };
+
+                if val.kind != ret
+                {
+                    return err!(
+                        span,
+                        "Cannot return a value of type {} from a function that returns {}",
+                        val.kind,
+                        ret
+                    );
+                }
+
+                // A return takes the type and cell of its value, so a body ending in a return has the right type
+                Ok(val)
             }
 
             Expr::ParseError =>

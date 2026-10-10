@@ -91,6 +91,15 @@ pub fn function<'a, D: Default>(
 }
 
 
+pub fn ret<'a, D: Default>(val: Option<Node<'a, D>>) -> Node<'a, D>
+{
+    Expr::Return {
+        val: val.map(Box::new),
+    }
+    .into()
+}
+
+
 pub fn cast<'a, D: Default>(val: Node<'a, D>, kind: &'a str) -> Node<'a, D>
 {
     Expr::Cast {
