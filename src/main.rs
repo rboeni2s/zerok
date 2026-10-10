@@ -36,15 +36,8 @@ fn run() -> Result<()>
     let mut program =
         parser::parse_prog::<Option<Annotation>>(&source_file_content, &source_file_path)?;
 
-    //TODO: Alle funktionen bis auf main erstmal ignorieren...
-    let main = program
-        .functions
-        .iter_mut()
-        .find(|function| function.name == "main")
-        .context("missing main funktion")?;
-
     // Annotate the ast
-    if let Err((span, msg)) = main.body.annotate(&env)
+    if let Err((span, msg)) = program.annotate(&env)
     {
         diagnostic::print_err(
             &source_file_path,
@@ -55,13 +48,18 @@ fn run() -> Result<()>
         return Err(anyhow::anyhow!("Type Error"));
     }
 
-
-    let ir = generate_ir(&main.body, &env);
+    //TODO: Generate the ir for all functions, until then only main is compiled
+    let main = program
+        .functions
+        .iter()
+        .find(|function| function.name == "main")
+        .expect("The typechecker makes sure there is a main function");
 
     dbg!(&program);
-    dbg!(&ir);
 
-    println!("{}", ir.to_iic());
+    // let ir = generate_ir(&main.body, &env);
+    // dbg!(&ir);
+    // println!("{}", ir.to_iic());
 
     Ok(())
 }

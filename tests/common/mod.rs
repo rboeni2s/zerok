@@ -80,6 +80,7 @@ pub fn function<'a, D: Default>(
                     name,
                     kind,
                     span: Default::default(),
+                    data: Default::default(),
                 }
             })
             .collect(),

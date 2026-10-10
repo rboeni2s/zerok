@@ -82,3 +82,75 @@ fn casts()
     assert!(kind_of("1 as string").is_err());
     assert!(kind_of("1 as foo").is_err());
 }
+
+
+/// Parses and annotates the program `input`, returning the type error message if there is one
+fn check_program(input: &str) -> Result<(), String>
+{
+    let mut program =
+        parser::parse_prog::<Option<Annotation>>(input, "").expect("Parsing failed");
+
+    program
+        .annotate(&Rc::new(Env::default()))
+        .map_err(|(_, msg)| msg)
+}
+
+
+#[test]
+fn functions()
+{
+    assert!(check_program("op main() {}").is_ok());
+    assert!(check_program("op main() -> i32 { 1 }").is_ok());
+    assert!(check_program("op add(a: i32, b: i32) -> i32 { a + b } op main() {}").is_ok());
+
+    // The body has to return the return type, functions without one return nothing
+    assert!(check_program("op main() -> u64 { sett a: i32 = 1; a }").is_err());
+    assert!(check_program("op main() { 1 }").is_err());
+    assert!(check_program("op main() { 1; }").is_ok());
+
+    // The return type is the expected type of the body, so literals take it
+    assert!(check_program("op main() -> u64 { 4000000000 }").is_ok());
+
+    // Parameters are only visible inside their function
+    assert!(check_program("op f(a: i32) {} op main() -> i32 { a }").is_err());
+
+    // Signatures have to be valid and unique
+    assert!(check_program("op main(a: foo) {}").is_err());
+    assert!(check_program("op main() -> foo {}").is_err());
+    assert!(check_program("op f(a: i32, a: i32) {} op main() {}").is_err());
+    assert!(check_program("op main() {} op main() {}").is_err());
+
+    // There has to be a main function without parameters
+    assert!(check_program("op f() {}").is_err());
+    assert!(check_program("op main(a: i32) {}").is_err());
+}
+
+
+#[test]
+fn calls()
+{
+    let add = "op add(a: i32, b: i32) -> i32 { a + b }";
+
+    assert!(check_program(&format!("{add} op main() -> i32 {{ add(1, 2) }}")).is_ok());
+    assert!(check_program(&format!("{add} op main() -> i32 {{ add(add(1, 2), 3) * 2 }}")).is_ok());
+
+    // Calls can come before the definition of the function, so recursion works
+    assert!(check_program("op main() -> i32 { f(1) } op f(n: i32) -> i32 { f(n - 1) }").is_ok());
+    assert!(check_program("op main() { even(1); } op even(n: u32) -> u32 { odd(n) } op odd(n: u32) -> u32 { even(n) }").is_ok());
+
+    // Arguments take the type of their parameter
+    assert!(check_program("op f(a: u64) {} op main() { f(4000000000); }").is_ok());
+    assert!(check_program("op f(a: i32) {} op main() { f(1f); }").is_err());
+    assert!(check_program("op f(a: i32) {} op main() { sett a: u32 = 1; f(a); }").is_err());
+
+    // Number of arguments
+    assert!(check_program(&format!("{add} op main() {{ add(1); }}")).is_err());
+    assert!(check_program(&format!("{add} op main() {{ add(1, 2, 3); }}")).is_err());
+
+    // Unknown functions
+    assert!(check_program("op main() { nope(); }").is_err());
+
+    // A call to a function without a return type has no value
+    assert!(check_program("op f() {} op main() -> i32 { f() + 1 }").is_err());
+    assert!(check_program("op f() {} op main() { f() }").is_ok());
+}

@@ -1,5 +1,6 @@
 mod env;
 mod kind;
+mod program;
 
 
 use crate::parser::{Expr, Node, atom::Atom};
@@ -266,14 +267,47 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(last_annotation)
             }
 
-            //TODO: Typecheck function calls
-            Expr::Call { name, .. } =>
+            Expr::Call { name, args } =>
             {
-                err!(
-                    span,
-                    "Calling {:?} failed, function calls are not supported yet",
-                    name
-                )
+                let Some((ret, params)) = env.get_function(name)
+                else
+                {
+                    return err!(span, "Unknown function {:?}", name);
+                };
+
+                if args.len() != params.len()
+                {
+                    return err!(
+                        span,
+                        "Function {:?} takes {} argument(s), but {} were given",
+                        name,
+                        params.len(),
+                        args.len()
+                    );
+                }
+
+                // Check the arguments
+                for (arg, param) in args.iter_mut().zip(params)
+                {
+                    // Expect the type of the argument so numbers can become the right type
+                    let arg_kind = arg.annotate_expecting(&env.child_env(), Some(param))?.kind;
+
+                    if arg_kind != param
+                    {
+                        return err!(
+                            arg.span,
+                            "Cannot pass a value of type {} to a parameter of type {} of {:?}",
+                            arg_kind,
+                            param,
+                            name
+                        );
+                    }
+                }
+
+                // A function that does not return anything has no value that could be stored, so it does not get a cell
+                let cell = (ret != Kind::None).then(|| env.put(EnvEntry::Register(Self::reg())));
+
+                Ok(Annotation { kind: ret, cell })
             }
 
             Expr::ParseError =>

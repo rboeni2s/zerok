@@ -6,12 +6,21 @@
     Kommentar
 */
 
-op null() -> u32 { 1 - 1 * 0 }
+op null() -> u32 { (1f - 1f * 0f) as u32 }
 op the_void(doomed: f32) {} 
 
+// Berechnet 400 auf eine extrem umständliche weise
 op main() -> i32
 {
+    // a = 20
     sett a: u32 = 10 + 5 * 2; // Ende der Zeile als Kommentar
+
+    // Komplett unnötiger Funktionsaufruf
+    the_void(a as f32);
+
+    // b = 20*20 = 400
     sett b: i32 = (kop; sett c: i32 = a as i32) * a as i32;
-    b
+
+    // b + 0 = b = 400
+    b + null() as i32
 }

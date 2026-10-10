@@ -4,11 +4,12 @@ use chumsky::prelude::*;
 
 /// A parameter of a function, e.g. `a: i32`
 #[derive(Debug, Clone)]
-pub struct Param<'src>
+pub struct Param<'src, D>
 {
     pub name: &'src str,
     pub kind: &'src str,
     pub span: SimpleSpan,
+    pub data: D,
 }
 
 
@@ -19,7 +20,7 @@ pub struct Param<'src>
 pub struct Function<'src, D>
 {
     pub name: &'src str,
-    pub params: Vec<Param<'src>>,
+    pub params: Vec<Param<'src, D>>,
 
     /// The return type, `None` if the function does not return anything
     pub ret: Option<&'src str>,
@@ -37,11 +38,11 @@ pub struct Program<'src, D>
 }
 
 
-impl PartialEq for Param<'_>
+impl<D> PartialEq for Param<'_, D>
 {
     fn eq(&self, other: &Self) -> bool
     {
-        // Do not compare the spans
+        // Do not compare the spans and data, just like the nodes of the ast
         self.name == other.name && self.kind == other.kind
     }
 }
@@ -78,6 +79,7 @@ where
                     name,
                     kind,
                     span: info.span(),
+                    data: D::default(),
                 }
             });
 

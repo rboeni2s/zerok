@@ -23,7 +23,7 @@ pub enum Kind
 
 impl Kind
 {
-    pub(super) fn from_str(value: &str) -> Option<Self>
+    pub fn from_str(value: &str) -> Option<Self>
     {
         match value
         {
@@ -39,28 +39,28 @@ impl Kind
         }
     }
 
-    pub(super) fn is_int(self) -> bool
+    pub fn is_int(self) -> bool
     {
         matches!(self, Kind::U32 | Kind::U64 | Kind::I32 | Kind::I64)
     }
 
-    pub(super) fn is_float(self) -> bool
+    pub fn is_float(self) -> bool
     {
         matches!(self, Kind::F32 | Kind::F64)
     }
 
-    pub(super) fn is_numeric(self) -> bool
+    pub fn is_numeric(self) -> bool
     {
         self.is_int() || self.is_float()
     }
 
-    pub(super) fn is_signed(self) -> bool
+    pub fn is_signed(self) -> bool
     {
         matches!(self, Kind::I32 | Kind::I64) || self.is_float()
     }
 
     /// The type of `atom`, number literals take the `expected` type if it fits and default to i32 and f32 otherwise
-    pub(super) fn of_atom(atom: &Atom, expected: Option<Kind>) -> Self
+    pub fn of_atom(atom: &Atom, expected: Option<Kind>) -> Self
     {
         match atom
         {
@@ -72,7 +72,7 @@ impl Kind
     }
 
     /// Checks if the value of a number literal can be represented by this type
-    pub(super) fn fits(self, atom: &Atom) -> bool
+    pub fn fits(self, atom: &Atom) -> bool
     {
         match (atom, self)
         {
@@ -108,12 +108,8 @@ impl fmt::Display for Kind
 
 
 //HACK: Replace this function with a proper lut
-pub(super) fn binop_compat<'a>(
-    op: &Binop,
-    lhs: Kind,
-    rhs: Kind,
-    _env: &Env<'a, EnvEntry>,
-) -> Option<Kind>
+pub fn binop_compat<'a>(op: &Binop, lhs: Kind, rhs: Kind, _env: &Env<'a, EnvEntry>)
+-> Option<Kind>
 {
     match (op, lhs, rhs)
     {
@@ -128,7 +124,7 @@ pub(super) fn binop_compat<'a>(
 
 
 //HACK: Replace this function with a proper lut
-pub(super) fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) -> Option<Kind>
+pub fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) -> Option<Kind>
 {
     match (op, arg)
     {
@@ -137,8 +133,8 @@ pub(super) fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) 
     }
 }
 
-
-pub(super) fn cast_compat(from: Kind, to: Kind) -> bool
+//HACK: Replace this function with a proper lut if things other than number become catsable in the future
+pub fn cast_compat(from: Kind, to: Kind) -> bool
 {
     from == to || (from.is_numeric() && to.is_numeric())
 }
