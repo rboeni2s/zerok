@@ -6,4 +6,5 @@ words = [
     "nop",
     "supertrait",
     "unaop",
+    "unq",
 ]

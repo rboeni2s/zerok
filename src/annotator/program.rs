@@ -1,5 +1,8 @@
 use super::{Annotation, Env, EnvEntry, Kind, new_register};
-use crate::parser::{Function, Program};
+use crate::{
+    parser::{Function, Program},
+    reg_util,
+};
 use chumsky::span::SimpleSpan;
 use std::rc::Rc;
 
@@ -86,6 +89,8 @@ impl<'a> Function<'a, Option<Annotation>>
     /// The signature has to be in `env` already, if it does not then thats a programmer error
     fn annotate(&mut self, env: &Rc<Env<'a, EnvEntry>>) -> Result<(), (SimpleSpan, String)>
     {
+        reg_util::reset_register();
+
         let (ret, params) = env
             .get_function(self.name)
             .expect("The signature of a function has to be collected before its body is annotated");

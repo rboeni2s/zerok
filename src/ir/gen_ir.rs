@@ -3,7 +3,7 @@ use crate::{
     Env,
     ExprAst,
     ProgAst,
-    annotator::{Annotation, EnvEntry, Kind, next_register},
+    annotator::{Annotation, EnvEntry, Kind},
     ir::IrReg,
     parser::{
         Expr,
@@ -11,6 +11,7 @@ use crate::{
         atom::Atom,
         ops::{Binop, Unaop},
     },
+    reg_util::{self, Reserved},
 };
 
 
@@ -59,11 +60,11 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
                 if cell_of(&func.body).is_some()
                 {
                     //... then move that value to the return register of the function
-                    ir.bind(entry_of(&func.body, env), func.ret_reg);
+                    ir.bind(entry_of(&func.body, env), Reserved::Return.into());
                 }
 
                 // In this case the function returns the return register
-                EnvEntry::Register(func.ret_reg)
+                EnvEntry::Register(Reserved::Return.into())
             }
         };
 
@@ -187,7 +188,7 @@ fn generate_expr_ir<'a>(
                 else
                 {
                     let val = generate_operand_ir(val, env, ir, func);
-                    ir.bind(val, func.ret_reg);
+                    ir.bind(val, Reserved::Return.into());
                 }
             }
 
@@ -223,8 +224,8 @@ fn generate_pow_ir<'a>(
     let loop_label = func.unique_label();
     let end_label = func.unique_label();
 
-    let counter = next_register();
-    let done = next_register();
+    let counter = reg_util::next_register();
+    let done = reg_util::next_register();
 
     ir.bind(EnvEntry::Atom(Atom::Int(1)), reg)
         .bind(exp, counter) // Use the counter instead of the exponent directly to avoid modifying the exponent for the rest of the program

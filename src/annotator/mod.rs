@@ -11,7 +11,10 @@ mod kind;
 mod program;
 
 
-use crate::parser::{Expr, Node, atom::Atom};
+use crate::{
+    parser::{Expr, Node, atom::Atom},
+    reg_util::new_register,
+};
 use chumsky::span::SimpleSpan;
 use kind::{binop_compat, cast_compat, unaop_compat};
 use std::{rc::Rc, sync::atomic::AtomicUsize};
@@ -42,22 +45,6 @@ impl Default for Annotation
         }
     }
 }
-
-
-/// Puts a new register into the store and returns its cell
-fn new_register(env: &Env<'_, EnvEntry>) -> usize
-{
-    env.put(EnvEntry::Register(next_register()))
-}
-
-
-/// Returns a new, unused register
-pub(crate) fn next_register() -> usize
-{
-    static REGISTER: AtomicUsize = AtomicUsize::new(0);
-    REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-}
-
 
 impl<'a> Node<'a, Option<Annotation>>
 {

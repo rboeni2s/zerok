@@ -1,4 +1,5 @@
-use crate::annotator::next_register;
+use crate::reg_util::next_register;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{Expr, Node, P, Token};
 use chumsky::prelude::*;
@@ -26,7 +27,6 @@ pub struct Function<'src, D>
 
     /// The return type, `None` if the function does not return anything
     pub ret: Option<&'src str>,
-    pub ret_reg: usize,
 
     pub body: Node<'src, D>,
     pub span: SimpleSpan,
@@ -37,7 +37,12 @@ impl<'src, D> Function<'src, D>
 {
     pub fn unique_label(&self) -> String
     {
-        format!("{}_{}", self.name, uuid::Uuid::new_v4().simple())
+        static LABEL_NUMBER: AtomicUsize = AtomicUsize::new(0);
+        format!(
+            "{}_unq{}",
+            self.name,
+            LABEL_NUMBER.fetch_add(1, Ordering::Relaxed)
+        )
     }
 
     pub fn return_label(&self) -> String
@@ -122,7 +127,6 @@ where
                     ret,
                     body,
                     span: info.span(),
-                    ret_reg: next_register(),
                 }
             });
 

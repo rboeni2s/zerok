@@ -6,6 +6,7 @@ pub mod annotator;
 pub mod diagnostic;
 pub mod ir;
 pub mod parser;
+pub mod reg_util;
 
 
 use crate::{
