@@ -1,0 +1,37 @@
+/*
+    Wochentag eines Datums nach der Zeller-Kongruenz
+    Wikipedia: https://de.wikipedia.org/wiki/Zellers_Kongruenz
+
+    Wochendtage nach der Tabelle auf wikipedia nummeriert:
+    0 = Samstag
+    1 = Sonntag
+    2 = Montag
+    3 = Dienstag
+    4 = Mittwoch
+    5 = Donnerstag
+    6 = Freitag
+*/
+
+op weekday(day: i32, month: i32, year: i32) -> i32
+{
+    // januar und Februar zählen als Monat 13 und 14 des Vorjahres???.
+    sett shift: i32 = (14 - month) / 12; // 1 für Jan oder Feb ansonsten 0
+    sett m: i32 = month + 12 * shift;
+    sett y: i32 = year - shift;
+
+    sett k: i32 = y % 100;
+    sett j: i32 = y / 100;
+
+    // (5*j) am ende anstatt (-2*j) denn dann wäre das ergebniss immer positiv (laut wikipedia...)
+    (day + ((m+1)*13 / 5) + k + (k/4) + (j/4) + (5*j)) % 7
+}
+
+
+op main() -> i32
+{
+    // 10.10.2026 -> 0 (Samstag)
+    // 01.01.2000 -> 0 (Samstag)
+    // 29.02.2024 -> 5 (Donnerstag)
+    
+    weekday(14, 10, 2026) // 4 = Mittwoch
+}

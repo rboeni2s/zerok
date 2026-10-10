@@ -6,10 +6,13 @@
     Kommentar
 */
 
+/// Berechnet 0 (hochkomplex)
 op null() -> u32 { ((1f - 1f) * 0f) as u32 }
+
+/// Macht einfach garnix
 op the_void(doomed: f32) {} 
 
-// Berechnet 400 auf eine extrem umständliche weise
+/// Berechnet 400 auf eine extrem umständliche weise und typecasted alles aus spass...
 op main() -> i32
 {
     // a = 20
