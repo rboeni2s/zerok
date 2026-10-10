@@ -47,10 +47,15 @@ impl Default for Annotation
 /// Puts a new register into the store and returns its cell
 fn new_register(env: &Env<'_, EnvEntry>) -> usize
 {
+    env.put(EnvEntry::Register(next_register()))
+}
+
+
+/// Returns a new, unused register
+pub(crate) fn next_register() -> usize
+{
     static REGISTER: AtomicUsize = AtomicUsize::new(0);
-    env.put(EnvEntry::Register(
-        REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-    ))
+    REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 

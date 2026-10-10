@@ -18,8 +18,8 @@ op main() -> i32
     // Komplett unnötiger Funktionsaufruf
     the_void(a as f32);
 
-    // b = 20*20 = 400
-    sett b: i32 = (kop; sett c: i32 = a as i32) * a as i32;
+    // b = 20**2 = 400
+    sett b: i32 = (kop; sett c: i32 = a as i32) ** 2;
 
     // b + 0 = b = 400
     b + null() as i32

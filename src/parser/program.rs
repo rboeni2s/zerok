@@ -34,7 +34,7 @@ impl<'src, D> Function<'src, D>
 {
     pub fn unique_label(&self) -> String
     {
-        format!("{}_{}", self.name, uuid::Uuid::new_v4())
+        format!("{}_{}", self.name, uuid::Uuid::new_v4().simple())
     }
 
     pub fn return_label(&self) -> String

@@ -1,0 +1,17 @@
+op main() -> u32
+{
+    // wrap_5(1);
+    sq(-2)
+}
+
+
+op wrap_5(val: u32) -> u32
+{
+    val % 5
+}
+
+
+op sq(val: i32) -> u32
+{
+    (val ** 2) as u32
+}

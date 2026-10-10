@@ -144,7 +144,7 @@ impl ToIIC for IrChunk
 
             IrChunk::Label { name } => format!("{name}:"),
             IrChunk::Jump { name } => format!("    goto {name}"),
-            IrChunk::CondJump { val, name } => format!("   if {} goto {name}", val.to_iic()),
+            IrChunk::CondJump { val, name } => format!("    if {} goto {name}", val.to_iic()),
         }
     }
 }

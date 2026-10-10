@@ -3,7 +3,7 @@ use crate::{
     Env,
     ExprAst,
     ProgAst,
-    annotator::{Annotation, EnvEntry, Kind},
+    annotator::{Annotation, EnvEntry, Kind, next_register},
     ir::IrReg,
     parser::{
         Expr,
@@ -83,8 +83,35 @@ fn generate_expr_ir<'a>(
         {
             let lhs = generate_operand_ir(lhs, env, ir, func);
             let rhs = generate_operand_ir(rhs, env, ir, func);
+            let reg = register_of(expr, env);
 
-            ir.binop(binop_to_ir(op), lhs, rhs, register_of(expr, env));
+            if matches!(op, Binop::Mod | Binop::Pow)
+                && expr
+                    .data
+                    .is_some_and(|annotation| annotation.kind.is_float())
+            {
+                todo!("The {op:?} operator is not implemented for floats in the ir yet");
+            }
+
+            match op
+            {
+                // a % b = a - (a / b) * b
+                Binop::Mod =>
+                {
+                    let res = EnvEntry::Register(reg);
+
+                    ir.binop(IrOp::Div, lhs.clone(), rhs.clone(), reg)
+                        .binop(IrOp::Mul, res.clone(), rhs, reg)
+                        .binop(IrOp::Sub, lhs, res, reg);
+                }
+
+                Binop::Pow => generate_pow_ir(lhs, rhs, reg, ir, func),
+
+                op =>
+                {
+                    ir.binop(binop_to_ir(op), lhs, rhs, reg);
+                }
+            }
         }
 
         Expr::Unaop { op, val } =>
@@ -143,6 +170,42 @@ fn generate_operand_ir<'a>(
 }
 
 
+fn generate_pow_ir<'a>(
+    base: EnvEntry,
+    exp: EnvEntry,
+    reg: usize,
+    ir: &mut IrBuilder,
+    func: &Function<'a, Option<Annotation>>,
+)
+{
+    let loop_label = func.unique_label();
+    let end_label = func.unique_label();
+
+    let counter = next_register();
+    let done = next_register();
+
+    ir.bind(EnvEntry::Atom(Atom::Int(1)), reg)
+        .bind(exp, counter) // Use the counter instead of the exponent directly to avoid modifying the exponent for the rest of the program
+        .label(&loop_label)
+        .binop(
+            IrOp::Lte,
+            EnvEntry::Register(counter),
+            EnvEntry::Atom(Atom::Int(0)),
+            done,
+        )
+        .conditional_jump(EnvEntry::Register(done), &end_label)
+        .binop(IrOp::Mul, EnvEntry::Register(reg), base, reg)
+        .binop(
+            IrOp::Sub,
+            EnvEntry::Register(counter),
+            EnvEntry::Atom(Atom::Int(1)),
+            counter,
+        )
+        .jump(loop_label)
+        .label(end_label);
+}
+
+
 /// The store cell of an annotated node
 fn cell_of(expr: &ExprAst<'_>) -> Option<usize>
 {
@@ -183,9 +246,7 @@ fn binop_to_ir(op: &Binop) -> IrOp
         Binop::Mul => IrOp::Mul,
         Binop::Div => IrOp::Div,
 
-        //TODO: implement loops and conditions in the ir and then implement these
-        Binop::Mod => todo!("The mod operator is not implemented in the ir yet"),
-        Binop::Pow => todo!("The pow operator is not implemented in the ir yet"),
+        Binop::Mod | Binop::Pow => unreachable!("{op:?} is built from multiple chunks"),
     }
 }
 
