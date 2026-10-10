@@ -83,11 +83,13 @@ impl ToIIC for EnvEntry
                 {
                     Atom::Str(_) =>
                     {
-                        todo!("IIC string repräsentationen sind noch nicht implementiert")
+                        todo!(
+                            "IIC string repräsentationen sind noch nicht implementiert, aber wahrscheinlich [char]"
+                        )
                     }
                     Atom::Int(num) => num.to_string(),
                     Atom::Float(num) => (*num as u64).to_string(),
-                    Atom::Nop => todo!("IIC nop ist noch nicht implementiert"),
+                    Atom::Nop => unreachable!("Für ein nop sollte nie code generiert werden"),
                 }
             }
         }

@@ -1,3 +1,6 @@
+#![allow(clippy::type_complexity)]
+
+
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
