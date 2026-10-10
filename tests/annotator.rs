@@ -87,8 +87,7 @@ fn casts()
 /// Parses and annotates the program `input`, returning the type error message if there is one
 fn check_program(input: &str) -> Result<(), String>
 {
-    let mut program =
-        parser::parse_prog::<Option<Annotation>>(input, "").expect("Parsing failed");
+    let mut program = parser::parse_prog::<Option<Annotation>>(input, "").expect("Parsing failed");
 
     program
         .annotate(&Rc::new(Env::default()))
@@ -132,7 +131,12 @@ fn calls()
     let add = "op add(a: i32, b: i32) -> i32 { a + b }";
 
     assert!(check_program(&format!("{add} op main() -> i32 {{ add(1, 2) }}")).is_ok());
-    assert!(check_program(&format!("{add} op main() -> i32 {{ add(add(1, 2), 3) * 2 }}")).is_ok());
+    assert!(
+        check_program(&format!(
+            "{add} op main() -> i32 {{ add(add(1, 2), 3) * 2 }}"
+        ))
+        .is_ok()
+    );
 
     // Calls can come before the definition of the function, so recursion works
     assert!(check_program("op main() -> i32 { f(1) } op f(n: i32) -> i32 { f(n - 1) }").is_ok());

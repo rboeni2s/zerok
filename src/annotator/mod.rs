@@ -1,3 +1,11 @@
+/// Creates a type error at `span`, the message is formatted like with `format!`
+macro_rules! err {
+    ($span:expr, $($msg:tt)+) => {
+        Err(($span, format!($($msg)+)))
+    };
+}
+
+
 mod env;
 mod kind;
 mod program;
@@ -11,24 +19,6 @@ use std::{rc::Rc, sync::atomic::AtomicUsize};
 
 pub use env::{Env, EnvEntry};
 pub use kind::Kind;
-
-
-fn make_err<S>(span: S, err: impl ToString) -> Result<Annotation, (S, String)>
-{
-    Err((span, err.to_string()))
-}
-
-
-macro_rules! err {
-    ($span:expr, $err:expr) => {
-        make_err($span, $err)
-    };
-
-    ($span:expr, $err:expr, $($args:expr),+) => {
-        make_err($span, format!($err, $($args),+))
-    };
-
-}
 
 /// The Annotations for one ast node
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -54,14 +44,18 @@ impl Default for Annotation
 }
 
 
+/// Puts a new register into the store and returns its cell
+fn new_register(env: &Env<'_, EnvEntry>) -> usize
+{
+    static REGISTER: AtomicUsize = AtomicUsize::new(0);
+    env.put(EnvEntry::Register(
+        REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    ))
+}
+
+
 impl<'a> Node<'a, Option<Annotation>>
 {
-    fn reg() -> usize
-    {
-        static REGISTER: AtomicUsize = AtomicUsize::new(0);
-        REGISTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    }
-
     /// Returns true if the type of this node is only determined by number literals, so it adapts to the expected type
     fn is_untyped_literal(&self) -> bool
     {
@@ -92,7 +86,7 @@ impl<'a> Node<'a, Option<Annotation>>
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
         let span = self.span;
-        let annotation = match &mut self.inner
+        let annotation: Annotation = match &mut self.inner
         {
             // Typecheck and annotate the atoms
             Expr::Atom(atom) =>
@@ -118,10 +112,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                         Ok(Annotation {
                             kind,
-                            cell: Some(env.put(EnvEntry::Atom {
-                                atom: atom.clone(),
-                                reg: Self::reg(),
-                            })),
+                            cell: Some(env.put(EnvEntry::Atom(atom.clone()))),
                         })
                     }
                 }
@@ -150,7 +141,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         Ok(Annotation {
                             kind: ret,
-                            cell: Some(env.put(EnvEntry::Register(Self::reg()))),
+                            cell: Some(new_register(env)),
                         })
                     }
                     None =>
@@ -176,7 +167,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         Ok(Annotation {
                             kind: ret,
-                            cell: Some(env.put(EnvEntry::Register(Self::reg()))),
+                            cell: Some(new_register(env)),
                         })
                     }
 
@@ -206,7 +197,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 let annotation = Annotation {
                     kind,
-                    cell: Some(env.put(EnvEntry::Register(Self::reg()))),
+                    cell: Some(new_register(env)),
                 };
 
                 env.bind_cell(name, &annotation);
@@ -216,14 +207,16 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Binding { name } =>
             {
-                env.fetch_bound_cell(name)
-                    .map(|(kind, cell)| {
-                        Annotation {
-                            kind,
-                            cell: Some(cell),
-                        }
-                    })
-                    .ok_or(err!(span, "Unknown binding {:?}", name).unwrap_err())
+                let Some((kind, cell)) = env.fetch_bound_cell(name)
+                else
+                {
+                    return err!(span, "Unknown binding {:?}", name);
+                };
+
+                Ok(Annotation {
+                    kind,
+                    cell: Some(cell),
+                })
             }
 
             Expr::Cast { val, kind } =>
@@ -243,7 +236,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 Ok(Annotation {
                     kind,
-                    cell: Some(env.put(EnvEntry::Register(Self::reg()))),
+                    cell: Some(new_register(env)),
                 })
             }
 
@@ -304,10 +297,11 @@ impl<'a> Node<'a, Option<Annotation>>
                     }
                 }
 
-                // A function that does not return anything has no value that could be stored, so it does not get a cell
-                let cell = (ret != Kind::None).then(|| env.put(EnvEntry::Register(Self::reg())));
-
-                Ok(Annotation { kind: ret, cell })
+                // Every call gets a register, even if the function does not return anything (it then returns 0)
+                Ok(Annotation {
+                    kind: ret,
+                    cell: Some(new_register(env)),
+                })
             }
 
             Expr::ParseError =>
@@ -317,17 +311,9 @@ impl<'a> Node<'a, Option<Annotation>>
                     "Jemand hat sich noch nicht überlegt, ob der Typ-Checker bei ParserFehler trotzdem versuchen könnte das Programm nach dem Fehler zu checken..."
                 )
             }
-        };
+        }?;
 
-        match annotation
-        {
-            Ok(annotation) =>
-            {
-                self.data = Some(annotation);
-                Ok(annotation)
-            }
-
-            e => e,
-        }
+        self.data = Some(annotation);
+        Ok(annotation)
     }
 }

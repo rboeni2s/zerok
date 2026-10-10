@@ -49,11 +49,8 @@ impl<T> Store<T>
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnvEntry
 {
-    Atom
-    {
-        atom: Atom,
-        reg: usize,
-    },
+    /// A literal, which is used directly as an operand and does not need a register
+    Atom(Atom),
 
     Register(usize),
 }

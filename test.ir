@@ -1,0 +1,25 @@
+
+define null():
+    R3 = 1 * 0
+    R4 = 1 - R3
+    R5 = R4
+    ret 0
+
+define the_void(R6):
+    ret 0
+
+define main():
+    R10 = 5 * 2
+    R11 = 10 + R10
+    R12 = R11
+    R13 = R12
+    R1000 = call the_void(R13)
+    R14 = R12
+    R15 = R14
+    R16 = R12
+    R17 = R15 * R16
+    R18 = R17
+    R19 = call null()
+    R20 = R19
+    R21 = R18 + R20
+    ret 0

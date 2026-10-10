@@ -48,18 +48,13 @@ fn run() -> Result<()>
         return Err(anyhow::anyhow!("Type Error"));
     }
 
-    //TODO: Generate the ir for all functions, until then only main is compiled
-    let main = program
-        .functions
-        .iter()
-        .find(|function| function.name == "main")
-        .expect("The typechecker makes sure there is a main function");
+    // dbg!(&program);
 
-    dbg!(&program);
+    let ir = generate_ir(&program, &env);
 
-    // let ir = generate_ir(&main.body, &env);
     // dbg!(&ir);
-    // println!("{}", ir.to_iic());
+
+    println!("{}", ir.to_iic());
 
     Ok(())
 }

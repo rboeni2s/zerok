@@ -1,8 +1,10 @@
 use super::{IrBuilder, IrChunk, IrOp};
 use crate::{
-    Ast,
     Env,
+    ExprAst,
+    ProgAst,
     annotator::EnvEntry,
+    ir::IrReg,
     parser::{
         Expr,
         atom::Atom,
@@ -11,37 +13,44 @@ use crate::{
 };
 
 
-pub fn generate_ir<'a>(expr: &Ast<'a>, env: &Env<'a>) -> Vec<IrChunk>
+pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
 {
-    let mut builder = IrBuilder::default();
-    builder.func("main", &[]);
+    let mut ir = IrBuilder::default();
 
-    generate_expr_ir(expr, env, &mut builder);
+    for func in &prog.functions
+    {
+        let params = func
+            .params
+            .iter()
+            .map(|param| {
+                let cell = param
+                    .data
+                    .expect("A function parameter must be annotated")
+                    .cell;
 
-    builder.build()
+                match env.get_unchecked(cell)
+                {
+                    EnvEntry::Register(reg) => IrReg::R(reg),
+                    EnvEntry::Atom(_) => unreachable!("Parameters are always stored in registers"),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        ir.func(func.name, &params);
+        generate_expr_ir(&func.body, env, &mut ir);
+    }
+
+    ir.build()
 }
 
 
-fn generate_expr_ir<'a>(expr: &Ast<'a>, env: &Env<'a>, ir: &mut IrBuilder)
+fn generate_expr_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder)
 {
     match &expr.inner
     {
-        Expr::Atom(atom) =>
-        {
-            if matches!(atom, Atom::Nop)
-            {
-                return;
-            }
-
-            let entry = entry_of(expr, env);
-            let EnvEntry::Atom { reg, .. } = entry
-            else
-            {
-                panic!("Register EnvEntry assigned to atom!!!")
-            };
-
-            ir.bind(entry, reg);
-        }
+        // Do not generate for atoms that are unused, because these will never have side effects and will also never be read
+        Expr::Atom(_) =>
+        {}
 
         Expr::Chain(ast_nodes) =>
         {
@@ -91,28 +100,31 @@ fn generate_expr_ir<'a>(expr: &Ast<'a>, env: &Env<'a>, ir: &mut IrBuilder)
             ir.bind(val, register_of(expr, env));
         }
 
-        Expr::Call { .. } => todo!("Function calls are not implemented in the ir yet"),
+        Expr::Call { name, args } =>
+        {
+            let args = args
+                .iter()
+                .map(|arg| generate_operand_ir(arg, env, ir))
+                .collect::<Vec<_>>();
 
-        Expr::ParseError => unreachable!("The typechecker does not accept asts with parse errors"),
+            ir.call(*name, &args, register_of(expr, env));
+        }
+
+        Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
     }
 }
 
 
-/// Generates the ir for `expr` and returns the entry holding its value, so it can be used as an operand.
-/// Literals do not need any ir, they are used directly as operands
-fn generate_operand_ir<'a>(expr: &Ast<'a>, env: &Env<'a>, ir: &mut IrBuilder) -> EnvEntry
+/// Generates the ir for `expr` and returns the entry holding its value, so it can be used as an operand
+fn generate_operand_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder) -> EnvEntry
 {
-    if !matches!(expr.inner, Expr::Atom(_))
-    {
-        generate_expr_ir(expr, env, ir);
-    }
-
+    generate_expr_ir(expr, env, ir);
     entry_of(expr, env)
 }
 
 
 /// The store cell of an annotated node
-fn cell_of(expr: &Ast<'_>) -> Option<usize>
+fn cell_of(expr: &ExprAst<'_>) -> Option<usize>
 {
     let Some(annotation) = &expr.data
     else
@@ -125,18 +137,19 @@ fn cell_of(expr: &Ast<'_>) -> Option<usize>
 
 
 /// The store entry holding the value of `expr`
-fn entry_of<'a>(expr: &Ast<'a>, env: &Env<'a>) -> EnvEntry
+fn entry_of<'a>(expr: &ExprAst<'a>, env: &Env<'a>) -> EnvEntry
 {
     env.get_unchecked(cell_of(expr))
 }
 
 
 /// The register the value of `expr` is stored in
-fn register_of<'a>(expr: &Ast<'a>, env: &Env<'a>) -> usize
+fn register_of<'a>(expr: &ExprAst<'a>, env: &Env<'a>) -> usize
 {
     match entry_of(expr, env)
     {
-        EnvEntry::Register(reg) | EnvEntry::Atom { reg, .. } => reg,
+        EnvEntry::Register(reg) => reg,
+        EnvEntry::Atom(atom) => panic!("The literal {atom} does not have a register"),
     }
 }
 
@@ -149,7 +162,8 @@ fn binop_to_ir(op: &Binop) -> IrOp
         Binop::Sub => IrOp::Sub,
         Binop::Mul => IrOp::Mul,
         Binop::Div => IrOp::Div,
-        // The ir has no mod and pow operators, they have to be built from other chunks (e.g. a loop for pow)
+
+        //TODO: implement loops and conditions in the ir and then implement these
         Binop::Mod => todo!("The mod operator is not implemented in the ir yet"),
         Binop::Pow => todo!("The pow operator is not implemented in the ir yet"),
     }

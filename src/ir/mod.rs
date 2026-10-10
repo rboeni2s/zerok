@@ -62,4 +62,16 @@ pub enum IrChunk
     {
         name: String, args: Vec<IrReg>
     },
+
+    Call
+    {
+        name: String,
+        args: Vec<EnvEntry>,
+        reg: IrReg,
+    },
+
+    Ret
+    {
+        val: EnvEntry
+    },
 }

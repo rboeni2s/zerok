@@ -60,6 +60,23 @@ impl IrBuilder
         self
     }
 
+    pub fn call(&mut self, name: impl Into<String>, args: &[EnvEntry], reg: usize) -> &mut Self
+    {
+        self.chunks.push(IrChunk::Call {
+            name: name.into(),
+            args: args.to_vec(),
+            reg: IrReg::R(reg),
+        });
+
+        self
+    }
+
+    pub fn ret(&mut self, val: EnvEntry) -> &mut Self
+    {
+        self.chunks.push(IrChunk::Ret { val });
+        self
+    }
+
     /// Returns the built chunks
     pub fn build(self) -> Vec<IrChunk>
     {

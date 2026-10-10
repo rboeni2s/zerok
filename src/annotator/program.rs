@@ -1,5 +1,5 @@
-use super::{Annotation, Env, EnvEntry, Kind};
-use crate::parser::{Function, Node, Program};
+use super::{Annotation, Env, EnvEntry, Kind, new_register};
+use crate::parser::{Function, Program};
 use chumsky::span::SimpleSpan;
 use std::rc::Rc;
 
@@ -15,11 +15,11 @@ impl<'a> Program<'a, Option<Annotation>>
 
             if env.put_function(function.name, ret, params).is_some()
             {
-                return Err({
-                    let span = function.span;
-                    let msg = format!("Function {:?} is defined more than once", function.name);
-                    (span, msg.to_string())
-                });
+                return err!(
+                    function.span,
+                    "Function {:?} is defined more than once",
+                    function.name
+                );
             }
         }
 
@@ -42,21 +42,12 @@ impl<'a> Program<'a, Option<Annotation>>
             .find(|function| function.name == "main")
         else
         {
-            return Err({
-                let span = SimpleSpan::from(0..0);
-                (span, "Missing main function".to_string())
-            });
+            return err!(SimpleSpan::from(0..0), "Missing main function");
         };
 
         if !main.params.is_empty()
         {
-            return Err({
-                let span = main.span;
-                (
-                    span,
-                    "The main function can not take any parameters".to_string(),
-                )
-            });
+            return err!(main.span, "The main function can not take any parameters");
         }
 
         Ok(())
@@ -74,11 +65,7 @@ impl<'a> Function<'a, Option<Annotation>>
         {
             Some(ret) =>
             {
-                Kind::from_str(ret).ok_or_else(|| {
-                    let span = self.span;
-                    let msg = format!("Unknown type {ret:?}");
-                    (span, msg.to_string())
-                })?
+                Kind::from_str(ret).ok_or_else(|| (self.span, format!("Unknown type {ret:?}")))?
             }
             None => Kind::None,
         };
@@ -87,11 +74,8 @@ impl<'a> Function<'a, Option<Annotation>>
             .params
             .iter()
             .map(|param| {
-                Kind::from_str(param.kind).ok_or_else(|| {
-                    let span = param.span;
-                    let msg = format!("Unknown type {:?}", param.kind);
-                    (span, msg.to_string())
-                })
+                Kind::from_str(param.kind)
+                    .ok_or_else(|| (param.span, format!("Unknown type {:?}", param.kind)))
             })
             .collect::<Result<_, _>>()?;
 
@@ -113,16 +97,16 @@ impl<'a> Function<'a, Option<Annotation>>
         {
             if fn_env.fetch_bound_cell(param.name).is_some()
             {
-                return Err({
-                    let span = param.span;
-                    let msg = format!("Parameter {:?} is defined more than once", param.name);
-                    (span, msg.to_string())
-                });
+                return err!(
+                    param.span,
+                    "Parameter {:?} is defined more than once",
+                    param.name
+                );
             }
 
             let annotation = Annotation {
                 kind,
-                cell: Some(fn_env.put(EnvEntry::Register(Node::reg()))),
+                cell: Some(new_register(&fn_env)),
             };
 
             fn_env.bind_cell(param.name, &annotation);
@@ -133,14 +117,13 @@ impl<'a> Function<'a, Option<Annotation>>
 
         if body.kind != ret
         {
-            return Err({
-                let span = self.body.span;
-                let msg = format!(
-                    "Function {:?} has to return {}, but its body returns {}",
-                    self.name, ret, body.kind
-                );
-                (span, msg.to_string())
-            });
+            return err!(
+                self.body.span,
+                "Function {:?} has to return {}, but its body returns {}",
+                self.name,
+                ret,
+                body.kind
+            );
         }
 
         Ok(())

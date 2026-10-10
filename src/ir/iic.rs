@@ -21,6 +21,18 @@ impl ToIIC for Vec<IrReg>
 }
 
 
+impl ToIIC for Vec<EnvEntry>
+{
+    fn to_iic(&self) -> String
+    {
+        self.iter()
+            .map(|e| e.to_iic())
+            .intersperse(", ".to_string())
+            .collect()
+    }
+}
+
+
 impl ToIIC for Vec<IrChunk>
 {
     fn to_iic(&self) -> String
@@ -77,7 +89,7 @@ impl ToIIC for EnvEntry
         match self
         {
             EnvEntry::Register(reg) => format!("R{reg}"),
-            EnvEntry::Atom { atom, .. } =>
+            EnvEntry::Atom(atom) =>
             {
                 match atom
                 {
@@ -106,7 +118,7 @@ impl ToIIC for IrChunk
             IrChunk::Bin { op, lhs, rhs, reg } =>
             {
                 format!(
-                    "\t{} = {} {} {}",
+                    "    {} = {} {} {}",
                     reg.to_iic(),
                     lhs.to_iic(),
                     op.to_iic(),
@@ -116,11 +128,16 @@ impl ToIIC for IrChunk
 
             IrChunk::Una { op, arg, reg } =>
             {
-                format!("\t{} = {} {}", reg.to_iic(), op.to_iic(), arg.to_iic())
+                format!("    {} = {} {}", reg.to_iic(), op.to_iic(), arg.to_iic())
             }
 
-            IrChunk::Bind { val, reg } => format!("\t{} = {}", reg.to_iic(), val.to_iic()),
-            IrChunk::Func { name, args } => format!("define {name}({}):", args.to_iic()),
+            IrChunk::Bind { val, reg } => format!("    {} = {}", reg.to_iic(), val.to_iic()),
+            IrChunk::Func { name, args } => format!("\ndefine {name}({}):", args.to_iic()),
+            IrChunk::Ret { val } => format!("    ret {}", val.to_iic()),
+            IrChunk::Call { name, args, reg } =>
+            {
+                format!("    {} = call {name}({})", reg.to_iic(), args.to_iic())
+            }
         }
     }
 }
