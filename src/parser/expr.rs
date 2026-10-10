@@ -140,7 +140,15 @@ where
                     .delimited_by(just(Token::LParen), just(Token::RParen));
 
                 // Operands to operators can either be an atom or a (chained) expression
-                let operand = choice((atom.clone(), parenthesized, decl, ret, call, binding));
+                let operand = choice((
+                    atom.clone(),
+                    parenthesized,
+                    decl,
+                    ret,
+                    call,
+                    binding,
+                    Self::if_parser(chain.clone()),
+                ));
 
                 // Parse the different operators and set their associativity and precedence
                 operand.pratt((
