@@ -3,10 +3,11 @@ use crate::{
     Env,
     ExprAst,
     ProgAst,
-    annotator::{EnvEntry, Kind},
+    annotator::{Annotation, EnvEntry, Kind},
     ir::IrReg,
     parser::{
         Expr,
+        Function,
         atom::Atom,
         ops::{Binop, Unaop},
     },
@@ -37,9 +38,10 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
             .collect::<Vec<_>>();
 
         ir.func(func.name, &params); // Genrate function head ir
-        generate_expr_ir(&func.body, env, &mut ir); // Generate function body ir
+        generate_expr_ir(&func.body, env, &mut ir, func); // Generate function body ir
 
         // Generate the return ir
+        ir.label(func.return_label());
         match env.get_function(func.name)
         {
             Some((Kind::None, ..)) => ir.ret(EnvEntry::Atom(Atom::Int(0))),
@@ -52,33 +54,42 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
 }
 
 
-fn generate_expr_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder)
+fn generate_expr_ir<'a>(
+    expr: &ExprAst<'a>,
+    env: &Env<'a>,
+    ir: &mut IrBuilder,
+    func: &Function<'a, Option<Annotation>>,
+)
 {
     match &expr.inner
     {
-        // Do not generate for atoms that are unused, because these will never have side effects and will also never be read
-        Expr::Atom(_) =>
+        // Atom: Do not generate for atoms that are unused, because these will never have side effects and will also never be read...
+        //
+        // Binding: The value of a binding already is in the register of its declaration...
+        //
+        // So in both cases no ir needs to be generated...
+        Expr::Atom(_) | Expr::Binding { .. } =>
         {}
 
         Expr::Chain(ast_nodes) =>
         {
             for node in ast_nodes
             {
-                generate_expr_ir(node, env, ir);
+                generate_expr_ir(node, env, ir, func);
             }
         }
 
         Expr::Binop { op, lhs, rhs } =>
         {
-            let lhs = generate_operand_ir(lhs, env, ir);
-            let rhs = generate_operand_ir(rhs, env, ir);
+            let lhs = generate_operand_ir(lhs, env, ir, func);
+            let rhs = generate_operand_ir(rhs, env, ir, func);
 
             ir.binop(binop_to_ir(op), lhs, rhs, register_of(expr, env));
         }
 
         Expr::Unaop { op, val } =>
         {
-            let val = generate_operand_ir(val, env, ir);
+            let val = generate_operand_ir(val, env, ir, func);
 
             ir.unaop(unaop_to_ir(op), val, register_of(expr, env));
         }
@@ -88,23 +99,19 @@ fn generate_expr_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder)
             // A binding of type none has no value that could be stored
             if cell_of(val).is_none()
             {
-                generate_expr_ir(val, env, ir);
+                generate_expr_ir(val, env, ir, func);
                 return;
             }
 
-            let val = generate_operand_ir(val, env, ir);
+            let val = generate_operand_ir(val, env, ir, func);
 
             ir.bind(val, register_of(expr, env));
         }
 
-        // The value of a binding already is in the register of its declaration
-        Expr::Binding { .. } =>
-        {}
-
         // The ir is not typed, so a cast only copies the value into the register of the cast
         Expr::Cast { val, .. } =>
         {
-            let val = generate_operand_ir(val, env, ir);
+            let val = generate_operand_ir(val, env, ir, func);
             ir.bind(val, register_of(expr, env));
         }
 
@@ -112,7 +119,7 @@ fn generate_expr_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder)
         {
             let args = args
                 .iter()
-                .map(|arg| generate_operand_ir(arg, env, ir))
+                .map(|arg| generate_operand_ir(arg, env, ir, func))
                 .collect::<Vec<_>>();
 
             ir.call(*name, &args, register_of(expr, env));
@@ -124,9 +131,14 @@ fn generate_expr_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder)
 
 
 /// Generates the ir for `expr` and returns the entry holding its value, so it can be used as an operand
-fn generate_operand_ir<'a>(expr: &ExprAst<'a>, env: &Env<'a>, ir: &mut IrBuilder) -> EnvEntry
+fn generate_operand_ir<'a>(
+    expr: &ExprAst<'a>,
+    env: &Env<'a>,
+    ir: &mut IrBuilder,
+    func: &Function<'a, Option<Annotation>>,
+) -> EnvEntry
 {
-    generate_expr_ir(expr, env, ir);
+    generate_expr_ir(expr, env, ir, func);
     entry_of(expr, env)
 }
 

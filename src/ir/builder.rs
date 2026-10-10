@@ -77,6 +77,27 @@ impl IrBuilder
         self
     }
 
+    pub fn label(&mut self, name: impl Into<String>) -> &mut Self
+    {
+        self.chunks.push(IrChunk::Label { name: name.into() });
+        self
+    }
+
+    pub fn jump(&mut self, name: impl Into<String>) -> &mut Self
+    {
+        self.chunk(IrChunk::Jump { name: name.into() });
+        self
+    }
+
+    pub fn conditional_jump(&mut self, val: EnvEntry, name: impl Into<String>) -> &mut Self
+    {
+        self.chunk(IrChunk::CondJump {
+            val,
+            name: name.into(),
+        });
+        self
+    }
+
     /// Returns the built chunks
     pub fn build(self) -> Vec<IrChunk>
     {

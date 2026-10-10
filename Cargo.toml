@@ -7,3 +7,4 @@ edition = "2024"
 anyhow = "1.0.104"
 ariadne = "0.6.0"
 chumsky = { version = "0.13.0", features = ["pratt"] }
+uuid = { version = "1.28.0", features = ["v4"] }

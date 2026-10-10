@@ -74,4 +74,19 @@ pub enum IrChunk
     {
         val: EnvEntry
     },
+
+    Label
+    {
+        name: String
+    },
+
+    Jump
+    {
+        name: String
+    },
+
+    CondJump
+    {
+        val: EnvEntry, name: String
+    },
 }

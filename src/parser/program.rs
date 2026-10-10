@@ -30,6 +30,20 @@ pub struct Function<'src, D>
 }
 
 
+impl<'src, D> Function<'src, D>
+{
+    pub fn unique_label(&self) -> String
+    {
+        format!("{}_{}", self.name, uuid::Uuid::new_v4())
+    }
+
+    pub fn return_label(&self) -> String
+    {
+        format!("{}_return", self.name)
+    }
+}
+
+
 /// A program is a vector of function definitions
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program<'src, D>

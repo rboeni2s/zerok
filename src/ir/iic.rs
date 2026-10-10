@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use super::{IrChunk, IrOp, IrReg};
 use crate::annotator::EnvEntry;
 use crate::parser::atom::Atom;
@@ -138,6 +140,10 @@ impl ToIIC for IrChunk
             {
                 format!("    {} = call {name}({})", reg.to_iic(), args.to_iic())
             }
+
+            IrChunk::Label { name } => format!("{name}:"),
+            IrChunk::Jump { name } => format!("    goto {name}"),
+            IrChunk::CondJump { val, name } => format!("   if {} goto {name}", val.to_iic()),
         }
     }
 }
