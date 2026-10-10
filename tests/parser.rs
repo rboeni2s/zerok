@@ -286,3 +286,82 @@ fn booleans()
         chain![binding("jaa"), binding("neee")]
     );
 }
+
+
+#[test]
+fn ifs()
+{
+    // Conditions and bodies are chains
+    assert_eq!(
+        parse("wenn ja { 1 }").unwrap(),
+        chain![if_(chain![boolean(true)], chain![num(1)], vec![], None)]
+    );
+
+    assert_eq!(
+        parse("wenn a { 1 } wenn anners b { 2 } wenn anners c { 3 } anners { 4 }").unwrap(),
+        chain![if_(
+            chain![binding("a")],
+            chain![num(1)],
+            vec![
+                (chain![binding("b")], chain![num(2)]),
+                (chain![binding("c")], chain![num(3)])
+            ],
+            Some(chain![num(4)])
+        )]
+    );
+
+    assert_eq!(
+        parse("wenn a { 1 } anners { 2; }").unwrap(),
+        chain![if_(
+            chain![binding("a")],
+            chain![num(1)],
+            vec![],
+            Some(chain![num(2), nop()])
+        )]
+    );
+
+    // A condition can be a whole chain, e.g. with a declaration
+    assert_eq!(
+        parse("wenn sett x: bool = ja; x {}").unwrap(),
+        chain![if_(
+            chain![decl("x", "bool", boolean(true)), binding("x")],
+            chain![],
+            vec![],
+            None
+        )]
+    );
+
+    // An if is an operand, so it can be used in other expressions
+    assert_eq!(
+        parse("1 + wenn a { 2 } anners { 3 } * 4").unwrap(),
+        chain![add(
+            num(1),
+            mul(
+                if_(
+                    chain![binding("a")],
+                    chain![num(2)],
+                    vec![],
+                    Some(chain![num(3)])
+                ),
+                num(4)
+            )
+        )]
+    );
+
+    // Ifs in a chain have to be separated by ";", otherwise the second "wenn" would start an elif
+    assert_eq!(
+        parse("wenn a { 1 }; wenn b { 2 }").unwrap(),
+        chain![
+            if_(chain![binding("a")], chain![num(1)], vec![], None),
+            if_(chain![binding("b")], chain![num(2)], vec![], None)
+        ]
+    );
+
+    // Bodies need braces, else and elif need an if before them
+    assert!(parse("wenn a 1").is_err());
+    assert!(parse("wenn a (1)").is_err());
+    assert!(parse("anners { 1 }").is_err());
+    assert!(parse("wenn anners a { 1 }").is_err());
+    assert!(parse("wenn a { 1 } anners { 2 } anners { 3 }").is_err());
+    assert!(parse("wenn a { 1 } anners { 2 } wenn anners b { 3 }").is_err());
+}

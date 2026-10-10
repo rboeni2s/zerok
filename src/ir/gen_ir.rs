@@ -180,7 +180,98 @@ fn generate_expr_ir<'a>(
             ir.jump(func.return_label());
         }
 
-        Expr::If { .. } => todo!("If statements are not implemented in the ir yet"),
+        Expr::If {
+            condition,
+            body,
+            elifs,
+            else_body,
+        } =>
+        {
+            // COND: IF COND
+            //    if COND GOTO BODY
+            //
+            // B: ELIF COND
+            //    if cond GOTO B_BODY
+            //
+            // C: ELIF COND
+            //    if cond GOTO C_BODY
+            //
+            // GOTO ELSE_BODY
+            //
+            // BODY: IF BODY
+            //    GOTO FINISHED
+            //
+            // B_BODY: ELIF-B BODY
+            //    GOTO FINISHED
+            //
+            // C_BODY: ELIF-C BODY
+            //    GOTO FINISHED
+            //
+            // ELSE_BODY: ELSE BODY
+            //
+            // FINISHED: ...
+
+
+            let reg = cell_of(expr).map(|_| register_of(expr, env));
+            let mut body_builder = IrBuilder::default();
+
+            let label_body = &func.unique_label();
+            let label_finished = &func.unique_label();
+            let label_else = &func.unique_label();
+
+            /*
+                Der Code ist SEHR repetativ, ich lasse ihn aber trotzdem
+                so, weil er dann vom verständnis her, näher am im kommentar beschriebenen
+                muster IR für if/elif/else verzweigungen ist...
+            */
+
+            // if condition and body
+            let condition = generate_operand_ir(condition, env, ir, func);
+            ir.conditional_jump(condition, label_body);
+            body_builder.label(label_body);
+            let body = generate_operand_ir(body, env, &mut body_builder, func);
+
+            // Wenn dieses if statement als expression mit einem wert benutzt wird, muss der
+            // wert dieses zweiges in das ergebnis register geschrieben werden
+            if let Some(reg) = reg
+            {
+                body_builder.bind(body, reg);
+            }
+
+            // Sprung zu finished, wenn der körper ausgeführt wurde
+            body_builder.jump(label_finished);
+
+            // jetzt das selbe wie für die if/if_body aber für jedes elif
+            for (cond, body) in elifs
+            {
+                let label_body = &func.unique_label();
+                let condition = generate_operand_ir(cond, env, ir, func);
+                ir.conditional_jump(condition, label_body);
+                body_builder.label(label_body);
+                let body = generate_operand_ir(body, env, &mut body_builder, func);
+                if let Some(reg) = reg
+                {
+                    body_builder.bind(body, reg);
+                }
+
+                body_builder.jump(label_finished);
+            }
+
+            // else body mit label
+            body_builder.label(label_else);
+            if let Some(else_body) = else_body
+            {
+                let else_body = generate_operand_ir(else_body, env, &mut body_builder, func);
+                if let Some(reg) = reg
+                {
+                    body_builder.bind(else_body, reg);
+                }
+            }
+
+            ir.jump(label_else)
+                .append(body_builder.build())
+                .label(label_finished);
+        }
 
         Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
     }

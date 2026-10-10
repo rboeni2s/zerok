@@ -97,6 +97,23 @@ pub fn function<'a, D: Default>(
 }
 
 
+pub fn if_<'a, D: Default>(
+    condition: Node<'a, D>,
+    body: Node<'a, D>,
+    elifs: Vec<(Node<'a, D>, Node<'a, D>)>,
+    else_body: Option<Node<'a, D>>,
+) -> Node<'a, D>
+{
+    Expr::If {
+        condition: Box::new(condition),
+        body: Box::new(body),
+        elifs,
+        else_body: else_body.map(Box::new),
+    }
+    .into()
+}
+
+
 pub fn ret<'a, D: Default>(val: Option<Node<'a, D>>) -> Node<'a, D>
 {
     Expr::Return {

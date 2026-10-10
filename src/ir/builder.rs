@@ -98,6 +98,12 @@ impl IrBuilder
         self
     }
 
+    pub fn append(&mut self, chunks: Vec<IrChunk>) -> &mut Self
+    {
+        self.chunks.extend(chunks);
+        self
+    }
+
     /// Returns the built chunks
     pub fn build(self) -> Vec<IrChunk>
     {

@@ -222,3 +222,47 @@ fn booleans()
     assert!(kind_of("-ja").is_err());
     assert!(kind_of("ja as i32").is_err());
 }
+
+
+#[test]
+fn ifs()
+{
+    // An if with an else has the type of its branches, without an else it has no value
+    assert_eq!(kind_of("wenn ja { 1 } anners { 2 }"), Ok(Kind::I32));
+    assert_eq!(kind_of("wenn ja { 1 } wenn anners nee { 2 } anners { 3 }"), Ok(Kind::I32));
+    assert_eq!(kind_of("wenn ja { 1 }"), Ok(Kind::None));
+    assert_eq!(kind_of("wenn ja { 1 } wenn anners nee { 2 }"), Ok(Kind::None));
+
+    // The expected type is passed on to the branches
+    assert_eq!(
+        kind_of("sett x: u64 = wenn ja { 4000000000 } anners { 1 }; x"),
+        Ok(Kind::U64)
+    );
+
+    // Conditions have to be bools
+    assert!(kind_of("wenn 1 { 1 } anners { 2 }").is_err());
+    assert!(kind_of("wenn ja { 1 } wenn anners 1 { 2 } anners { 3 }").is_err());
+    assert!(kind_of("wenn { 1 }").is_err());
+    assert!(kind_of("wenn ja; { 1 }").is_err());
+
+    // With an else all branches have to have the same type, without one the values are not used
+    assert!(kind_of("wenn ja { 1 } anners { 1f }").is_err());
+    assert!(kind_of("wenn ja { 1 } wenn anners nee { 1f } anners { 2 }").is_err());
+    assert!(kind_of("wenn ja { 1 } wenn anners nee { 1f }").is_ok());
+
+    // Bindings of a condition are visible in its body and all later branches
+    assert_eq!(kind_of("wenn sett x: u32 = 5; ja { x } anners { x }"), Ok(Kind::U32));
+    assert_eq!(
+        kind_of("wenn sett x: u32 = 5; nee { x } wenn anners sett y: u32 = x; ja { y } anners { x + y }"),
+        Ok(Kind::U32)
+    );
+
+    // But not after the if, in earlier branches or from one body to another
+    assert!(kind_of("wenn sett x: u32 = 5; ja { x } anners { x }; x").is_err());
+    assert!(kind_of("wenn nee { y } wenn anners sett y: i32 = 1; ja { y } anners { 1 }").is_err());
+    assert!(kind_of("wenn ja { sett y: i32 = 1; y } anners { y }").is_err());
+
+    // A branch that returns has the return type of the function
+    assert!(check_program("op f(b: bool) -> i32 { wenn b { geve 1 } anners { 2 } } op main() {}").is_ok());
+    assert!(check_program("op f(b: bool) -> i32 { wenn b { 1 } anners { 2 } } op main() -> i32 { f(ja) + f(nee) }").is_ok());
+}

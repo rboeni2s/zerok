@@ -266,8 +266,8 @@ where
             .map_with(|(((cond, body), elifs), else_body), info| {
                 AstNode::new(
                     Self::If {
-                        condition: todo!(),
-                        body: todo!(),
+                        condition: Box::new(cond),
+                        body: Box::new(body),
                         elifs,
                         else_body: else_body.map(Box::new),
                     },
