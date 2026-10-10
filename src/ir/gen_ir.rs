@@ -3,7 +3,7 @@ use crate::{
     Env,
     ExprAst,
     ProgAst,
-    annotator::EnvEntry,
+    annotator::{EnvEntry, Kind},
     ir::IrReg,
     parser::{
         Expr,
@@ -36,8 +36,16 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
             })
             .collect::<Vec<_>>();
 
-        ir.func(func.name, &params);
-        generate_expr_ir(&func.body, env, &mut ir);
+        ir.func(func.name, &params); // Genrate function head ir
+        generate_expr_ir(&func.body, env, &mut ir); // Generate function body ir
+
+        // Generate the return ir
+        match env.get_function(func.name)
+        {
+            Some((Kind::None, ..)) => ir.ret(EnvEntry::Atom(Atom::Int(0))),
+            Some((kind, ..)) => ir.ret(entry_of(&func.body, env)),
+            None => unreachable!("This function must exists because its is already generating"),
+        };
     }
 
     ir.build()

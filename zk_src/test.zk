@@ -6,7 +6,7 @@
     Kommentar
 */
 
-op null() -> u32 { (1f - 1f * 0f) as u32 }
+op null() -> u32 { ((1f - 1f) * 0f) as u32 }
 op the_void(doomed: f32) {} 
 
 // Berechnet 400 auf eine extrem umständliche weise
