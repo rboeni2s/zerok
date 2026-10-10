@@ -77,8 +77,15 @@ impl<'a> Function<'a, Option<Annotation>>
             .params
             .iter()
             .map(|param| {
-                Kind::from_str(param.kind)
-                    .ok_or_else(|| (param.span, format!("Unknown type {:?}", param.kind)))
+                match Kind::from_str(param.kind)
+                {
+                    Some(Kind::None) =>
+                    {
+                        Err((param.span, "Parameters can not be of type none".into()))
+                    }
+                    Some(kind) => Ok(kind),
+                    None => Err((param.span, format!("Unknown type {:?}", param.kind))),
+                }
             })
             .collect::<Result<_, _>>()?;
 
@@ -120,7 +127,7 @@ impl<'a> Function<'a, Option<Annotation>>
 
         let body = self.body.annotate_expecting(&fn_env, Some(ret))?;
 
-        // The value of a body that ends in a return is never used, e.g. "{ return 1; }"
+        // The value of a body that ends in a return is never used, e.g. "{ geve 1; }"
         if body.kind != ret && !self.body.ends_with_return()
         {
             return err!(

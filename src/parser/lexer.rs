@@ -3,10 +3,10 @@ use std::fmt;
 
 
 pub const KW_DECL: &str = "sett";
-pub const KW_NOP: &str = "kop";
+pub const KW_NOP: &str = "keenop";
 pub const KW_AS: &str = "as";
 pub const KW_FN: &str = "op";
-pub const KW_RET: &str = "return";
+pub const KW_RET: &str = "geve";
 
 
 pub type Spanned<T> = (T, SimpleSpan);

@@ -5,6 +5,6 @@ op main() -> u32
 
 
 op a() -> u32 { 1 }
-op b() -> u32 { return 10; 1 }
-op c() -> u32 { return 100 }
-op d() -> u32 { return 1000; }
+op b() -> u32 { geve 10; 1 }
+op c() -> u32 { geve 100 }
+op d() -> u32 { geve 1000; }

@@ -61,7 +61,7 @@ impl<'a> Node<'a, Option<Annotation>>
         }
     }
 
-    /// Returns true if this node ends in a return, e.g. "a; return b;", so its own value is never used
+    /// Returns true if this node ends in a return, e.g. "a; geve b;", so its own value is never used
     fn ends_with_return(&self) -> bool
     {
         match &self.inner
@@ -243,6 +243,11 @@ impl<'a> Node<'a, Option<Annotation>>
                 {
                     return err!(span, "Unknown type {:?}", kind);
                 };
+
+                if kind == Kind::None
+                {
+                    return err!(span, "Cannot cast to none");
+                }
 
                 let val = val.annotate_expecting(&env.child_env(), Some(kind))?.kind;
 

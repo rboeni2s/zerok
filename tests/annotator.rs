@@ -163,32 +163,46 @@ fn calls()
 #[test]
 fn returns()
 {
-    assert!(check_program("op main() -> i32 { return 1 }").is_ok());
-    assert!(check_program("op main() -> i32 { return 1; }").is_ok());
-    assert!(check_program("op main() -> i32 { sett a: i32 = 1; return a; }").is_ok());
-    assert!(check_program("op main() { return }").is_ok());
-    assert!(check_program("op main() { return; }").is_ok());
+    assert!(check_program("op main() -> i32 { geve 1 }").is_ok());
+    assert!(check_program("op main() -> i32 { geve 1; }").is_ok());
+    assert!(check_program("op main() -> i32 { sett a: i32 = 1; geve a; }").is_ok());
+    assert!(check_program("op main() { geve }").is_ok());
+    assert!(check_program("op main() { geve; }").is_ok());
 
     // The returned value has to have the return type of the function
-    assert!(check_program("op main() -> i32 { return 1f }").is_err());
-    assert!(check_program("op main() -> i32 { sett a: u32 = 1; return a }").is_err());
-    assert!(check_program("op main() { return 1 }").is_err());
-    assert!(check_program("op main() -> i32 { return }").is_err());
+    assert!(check_program("op main() -> i32 { geve 1f }").is_err());
+    assert!(check_program("op main() -> i32 { sett a: u32 = 1; geve a }").is_err());
+    assert!(check_program("op main() { geve 1 }").is_err());
+    assert!(check_program("op main() -> i32 { geve }").is_err());
 
     // Literals take the return type of the function
-    assert!(check_program("op main() -> u64 { return 4000000000 }").is_ok());
+    assert!(check_program("op main() -> u64 { geve 4000000000 }").is_ok());
 
     // A return in the middle of a body does not change the type of the body
-    assert!(check_program("op main() -> i32 { return 1; 2 }").is_ok());
-    assert!(check_program("op main() -> i32 { return 1; 2f }").is_err());
+    assert!(check_program("op main() -> i32 { geve 1; 2 }").is_ok());
+    assert!(check_program("op main() -> i32 { geve 1; 2f }").is_err());
 
     // Returns inside of expressions
-    assert!(check_program("op main() -> i32 { 1 + return 2 }").is_ok());
-    assert!(check_program("op main() -> i32 { sett a: i32 = (return 1); a }").is_ok());
+    assert!(check_program("op main() -> i32 { 1 + geve 2 }").is_ok());
+    assert!(check_program("op main() -> i32 { sett a: i32 = (geve 1); a }").is_ok());
 
     // Return types of other functions do not matter
-    assert!(check_program("op f() -> u64 { return 1 } op main() -> i32 { return 1 }").is_ok());
+    assert!(check_program("op f() -> u64 { geve 1 } op main() -> i32 { geve 1 }").is_ok());
 
     // There is no function to return from outside of functions
-    assert!(kind_of("return 1").is_err());
+    assert!(kind_of("geve 1").is_err());
+}
+
+
+#[test]
+fn none_values()
+{
+    // None can not be the type of a parameter or the target of a cast
+    assert!(check_program("op f(x: none) {} op main() {}").is_err());
+    assert!(kind_of("keenop as none").is_err());
+    assert!(kind_of("1 as none").is_err());
+
+    // But it can be the type of a binding and the return type of a function
+    assert_eq!(kind_of("sett x: none = keenop; x"), Ok(Kind::None));
+    assert!(check_program("op main() -> none { geve keenop }").is_ok());
 }

@@ -147,13 +147,6 @@ fn generate_expr_ir<'a>(
 
         Expr::Decl { val, .. } =>
         {
-            // A binding of type none has no value that could be stored
-            if cell_of(val).is_none()
-            {
-                generate_expr_ir(val, env, ir, func);
-                return;
-            }
-
             let val = generate_operand_ir(val, env, ir, func);
 
             ir.bind(val, register_of(expr, env));
@@ -180,16 +173,8 @@ fn generate_expr_ir<'a>(
         {
             if let Some(val) = val
             {
-                // A value of type none (e.g. "return kop") has no cell, so only its side effects are generated
-                if cell_of(val).is_none()
-                {
-                    generate_expr_ir(val, env, ir, func);
-                }
-                else
-                {
-                    let val = generate_operand_ir(val, env, ir, func);
-                    ir.bind(val, Reserved::Return.into());
-                }
+                let val = generate_operand_ir(val, env, ir, func);
+                ir.bind(val, Reserved::Return.into());
             }
 
             ir.jump(func.return_label());
@@ -209,7 +194,13 @@ fn generate_operand_ir<'a>(
 ) -> EnvEntry
 {
     generate_expr_ir(expr, env, ir, func);
-    entry_of(expr, env)
+
+    // Values of type none (e.g. "keenop") have no cell, they are represented by 0
+    match cell_of(expr)
+    {
+        Some(_) => entry_of(expr, env),
+        None => EnvEntry::Atom(Atom::Int(0)),
+    }
 }
 
 

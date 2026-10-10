@@ -16,11 +16,11 @@ pub enum Reserved
 }
 
 
-impl Into<usize> for Reserved
+impl From<Reserved> for usize
 {
-    fn into(self) -> usize
+    fn from(val: Reserved) -> Self
     {
-        self as u8 as usize
+        val as u8 as usize
     }
 }
 

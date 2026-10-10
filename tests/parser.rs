@@ -84,9 +84,9 @@ fn comments()
 fn keywords_and_identifiers()
 {
     assert_eq!(
-        parse("sett nopx: num = 1; setts").unwrap(),
+        parse("sett keenopx: num = 1; setts").unwrap(),
         chain![
-            decl("nopx", "num", num(1)),
+            decl("keenopx", "num", num(1)),
             Expr::Binding { name: "setts" }.into()
         ]
     );
@@ -234,37 +234,37 @@ fn only_functions_at_toplevel()
 #[test]
 fn returns()
 {
-    assert_eq!(parse("return").unwrap(), chain![ret(None)]);
-    assert_eq!(parse("return 1").unwrap(), chain![ret(Some(num(1)))]);
-    assert_eq!(parse("return;").unwrap(), chain![ret(None), nop()]);
+    assert_eq!(parse("geve").unwrap(), chain![ret(None)]);
+    assert_eq!(parse("geve 1").unwrap(), chain![ret(Some(num(1)))]);
+    assert_eq!(parse("geve;").unwrap(), chain![ret(None), nop()]);
 
     // The returned value is a whole term, but not the rest of the chain
     assert_eq!(
-        parse("return a + 2 * b; 3").unwrap(),
+        parse("geve a + 2 * b; 3").unwrap(),
         chain![
             ret(Some(add(binding("a"), mul(num(2), binding("b"))))),
             num(3)
         ]
     );
     assert_eq!(
-        parse("return (1; 2)").unwrap(),
+        parse("geve (1; 2)").unwrap(),
         chain![ret(Some(chain![num(1), num(2)]))]
     );
     assert_eq!(
-        parse("return f(1) as u32").unwrap(),
+        parse("geve f(1) as u32").unwrap(),
         chain![ret(Some(cast(call("f", vec![num(1)]), "u32")))]
     );
 
     // A return without a value at the end of a body or parenthesized chain
     assert_eq!(
-        parse_program("op main() { return }").unwrap(),
+        parse_program("op main() { geve }").unwrap(),
         Program {
             functions: vec![function("main", &[], None, chain![ret(None)])]
         }
     );
-    assert_eq!(parse("(return)").unwrap(), chain![chain![ret(None)]]);
+    assert_eq!(parse("(geve)").unwrap(), chain![chain![ret(None)]]);
 
-    // "return" is a keyword and can not be used as an identifier
-    assert!(parse("sett return: i32 = 1").is_err());
-    assert_eq!(parse("returns").unwrap(), chain![binding("returns")]);
+    // "geve" is a keyword and can not be used as an identifier
+    assert!(parse("sett geve: i32 = 1").is_err());
+    assert_eq!(parse("geves").unwrap(), chain![binding("geves")]);
 }
