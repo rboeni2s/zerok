@@ -37,6 +37,12 @@ pub enum Expr<'src, D>
         name: &'src str,
     },
 
+    Call
+    {
+        name: &'src str,
+        args: Vec<Node<'src, D>>,
+    },
+
     Cast
     {
         val: Box<Node<'src, D>>,
@@ -88,6 +94,18 @@ where
                     })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
+                // Check if this expression is a function call, the arguments are separated by ","
+                let call = ident
+                    .then(
+                        term.clone()
+                            .separated_by(just(Token::Comma))
+                            .allow_trailing()
+                            .collect::<Vec<_>>()
+                            .delimited_by(just(Token::LParen), just(Token::RParen)),
+                    )
+                    .map(|(name, args)| Self::Call { name, args })
+                    .map_with(|expr, span| AstNode::new(expr, span.span()));
+
                 // Check if this expression is a ident to a binding
                 let binding = ident
                     .map(|name| Self::Binding { name })
@@ -99,7 +117,7 @@ where
                     .delimited_by(just(Token::LParen), just(Token::RParen));
 
                 // Operands to operators can either be an atom or a (chained) expression
-                let operand = atom.clone().or(parenthesized).or(decl).or(binding);
+                let operand = atom.clone().or(parenthesized).or(decl).or(call).or(binding);
 
                 // Parse the different operators and set their associativity and precedence
                 operand.pratt((
@@ -151,6 +169,7 @@ where
             choice((
                 just(Token::Semicolon).ignored(),
                 just(Token::RParen).ignored(),
+                just(Token::RBrace).ignored(),
                 end(),
             ))
         };

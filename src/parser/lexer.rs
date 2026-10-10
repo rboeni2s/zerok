@@ -5,6 +5,7 @@ use std::fmt;
 pub const KW_DECL: &str = "sett";
 pub const KW_NOP: &str = "kop";
 pub const KW_AS: &str = "as";
+pub const KW_FN: &str = "op";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -21,11 +22,13 @@ pub enum Token<'src>
     // Keywords
     Decl,
     As,
+    Fn,
     Nop,
 
     // Symbols
     Semicolon,
     Doublecolon,
+    Arrow,
     Plus,
     Minus,
     Star,
@@ -54,8 +57,10 @@ impl fmt::Display for Token<'_>
             Token::Decl => write!(f, "{KW_DECL}"),
             Token::Nop => write!(f, "{KW_NOP}"),
             Token::As => write!(f, "{KW_AS}"),
+            Token::Fn => write!(f, "{KW_FN}"),
             Token::Semicolon => write!(f, ";"),
             Token::Doublecolon => write!(f, ":"),
+            Token::Arrow => write!(f, "->"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "*"),
@@ -145,12 +150,15 @@ pub fn lexer<'src>()
             KW_DECL => Token::Decl,
             KW_NOP => Token::Nop,
             KW_AS => Token::As,
+            KW_FN => Token::Fn,
             _ => Token::Ident(ident),
         }
     });
 
     let symbol = choice((
+        // Multi character symbols have to be checked before the single character symbols they start with
         just("**").to(Token::StarStar),
+        just("->").to(Token::Arrow),
         just(";").to(Token::Semicolon),
         just(":").to(Token::Doublecolon),
         just("+").to(Token::Plus),

@@ -6,7 +6,7 @@ use zerok::parser;
 /// Parses and annotates `input`, returning the type of the whole program or the type error message
 fn kind_of(input: &str) -> Result<Kind, String>
 {
-    let mut ast = parser::parse::<Option<Annotation>>(input, "").expect("Parsing failed");
+    let mut ast = parser::parse_expr::<Option<Annotation>>(input, "").expect("Parsing failed");
 
     ast.annotate(&Rc::new(Env::default()))
         .map(|annotation| annotation.kind)

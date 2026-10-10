@@ -4,5 +4,6 @@ words = [
     "iic",
     "lut",
     "nop",
+    "supertrait",
     "unaop",
 ]

@@ -6,6 +6,12 @@
     Kommentar
 */
 
-sett a: u32 = 10 + 5 * 2; // Ende der Zeile als Kommentar
-sett b: i32 = (kop; sett c: i32 = a as i32) * a as i32;
-b
+op null() -> u32 { 1 - 1 * 0 }
+op the_void(doomed: f32) {} 
+
+op main() -> i32
+{
+    sett a: u32 = 10 + 5 * 2; // Ende der Zeile als Kommentar
+    sett b: i32 = (kop; sett c: i32 = a as i32) * a as i32;
+    b
+}

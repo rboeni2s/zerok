@@ -6,7 +6,13 @@ use zerok::parser;
 
 fn parse(input: &str) -> Result<Node<'_, ()>, anyhow::Error>
 {
-    parser::parse(input, "")
+    parser::parse_expr(input, "")
+}
+
+
+fn parse_program(input: &str) -> Result<Program<'_, ()>, anyhow::Error>
+{
+    parser::parse_prog(input, "")
 }
 
 
@@ -147,4 +153,79 @@ fn operator_precedence_and_associativity()
         parse("1 + 2 * 3").unwrap(),
         chain![add(num(1), mul(num(2), num(3)))]
     );
+}
+
+
+#[test]
+fn calls()
+{
+    assert_eq!(parse("f()").unwrap(), chain![call("f", vec![])]);
+    assert_eq!(
+        parse("add(1, a * 2,)").unwrap(),
+        chain![call("add", vec![num(1), mul(binding("a"), num(2))])]
+    );
+
+    // Calls can be nested and used as operands, chains as arguments need parentheses
+    assert_eq!(
+        parse("-f(g(1), (2; 3)) + 1").unwrap(),
+        chain![add(
+            neg(call(
+                "f",
+                vec![call("g", vec![num(1)]), chain![num(2), num(3)]]
+            )),
+            num(1)
+        )]
+    );
+
+    assert!(parse("f(1; 2)").is_err());
+}
+
+
+#[test]
+fn functions()
+{
+    assert_eq!(
+        parse_program("op add(a: i32, b: i32) -> i32 { a+b}").unwrap(),
+        Program {
+            functions: vec![function(
+                "add",
+                &[("a", "i32"), ("b", "i32")],
+                Some("i32"),
+                chain![add(binding("a"), binding("b"))]
+            )]
+        }
+    );
+
+    // Functions without parameters, return type or body
+    assert_eq!(
+        parse_program("op main() { add(1, 2); } op nothing() {}").unwrap(),
+        Program {
+            functions: vec![
+                function(
+                    "main",
+                    &[],
+                    None,
+                    chain![call("add", vec![num(1), num(2)]), nop()]
+                ),
+                function("nothing", &[], None, chain![]),
+            ]
+        }
+    );
+
+    assert_eq!(parse_program("").unwrap(), Program { functions: vec![] });
+}
+
+
+#[test]
+fn only_functions_at_toplevel()
+{
+    assert!(parse_program("1 + 2").is_err());
+    assert!(parse_program("op main() { 1 } 1 + 2").is_err());
+    assert!(parse_program("op main() { op inner() { 1 } }").is_err());
+
+    // Malformed heads
+    assert!(parse_program("op main { 1 }").is_err());
+    assert!(parse_program("op main() -> { 1 }").is_err());
+    assert!(parse_program("op main(a) { 1 }").is_err());
+    assert!(parse_program("op main() 1").is_err());
 }

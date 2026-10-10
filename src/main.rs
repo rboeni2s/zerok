@@ -33,10 +33,18 @@ fn run() -> Result<()>
     let source_file_content = std::fs::read_to_string(&source_file_path)?;
     let env = Rc::new(annotator::Env::<EnvEntry>::default());
 
-    let mut ast = parser::parse::<Option<Annotation>>(&source_file_content, &source_file_path)?;
+    let mut program =
+        parser::parse_prog::<Option<Annotation>>(&source_file_content, &source_file_path)?;
+
+    //TODO: Alle funktionen bis auf main erstmal ignorieren...
+    let main = program
+        .functions
+        .iter_mut()
+        .find(|function| function.name == "main")
+        .context("missing main funktion")?;
 
     // Annotate the ast
-    if let Err((span, msg)) = ast.annotate(&env)
+    if let Err((span, msg)) = main.body.annotate(&env)
     {
         diagnostic::print_err(
             &source_file_path,
@@ -48,9 +56,9 @@ fn run() -> Result<()>
     }
 
 
-    let ir = generate_ir(&ast, &env);
+    let ir = generate_ir(&main.body, &env);
 
-    dbg!(&ast);
+    dbg!(&program);
     dbg!(&ir);
 
     println!("{}", ir.to_iic());

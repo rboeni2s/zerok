@@ -5,7 +5,7 @@
 
 pub use zerok::parser::atom::Atom;
 pub use zerok::parser::ops::{Binop, Unaop};
-pub use zerok::parser::{Expr, Node};
+pub use zerok::parser::{Expr, Function, Node, Param, Program};
 
 
 macro_rules! chain {
@@ -54,6 +54,39 @@ pub fn decl<'a, D: Default>(name: &'a str, kind: &'a str, expr: Node<'a, D>) -> 
 pub fn binding<'a, D: Default>(name: &'a str) -> Node<'a, D>
 {
     Expr::Binding { name }.into()
+}
+
+
+pub fn call<'a, D: Default>(name: &'a str, args: Vec<Node<'a, D>>) -> Node<'a, D>
+{
+    Expr::Call { name, args }.into()
+}
+
+
+/// Builds a function, `params` are pairs of names and types
+pub fn function<'a, D: Default>(
+    name: &'a str,
+    params: &[(&'a str, &'a str)],
+    ret: Option<&'a str>,
+    body: Node<'a, D>,
+) -> Function<'a, D>
+{
+    Function {
+        name,
+        params: params
+            .iter()
+            .map(|&(name, kind)| {
+                Param {
+                    name,
+                    kind,
+                    span: Default::default(),
+                }
+            })
+            .collect(),
+        ret,
+        body,
+        span: Default::default(),
+    }
 }
 
 

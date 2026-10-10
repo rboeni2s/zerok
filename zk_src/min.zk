@@ -1,2 +1,5 @@
 // Einfach 5
-5; 29; kop; 10;
+op main()
+{
+    5; 29; kop; 10;
+}

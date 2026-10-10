@@ -266,6 +266,16 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(last_annotation)
             }
 
+            //TODO: Typecheck function calls
+            Expr::Call { name, .. } =>
+            {
+                err!(
+                    span,
+                    "Calling {:?} failed, function calls are not supported yet",
+                    name
+                )
+            }
+
             Expr::ParseError =>
             {
                 err!(
