@@ -65,6 +65,7 @@ impl ToIIC for IrOp
             IrOp::Gte => ">=",
             IrOp::And => "and",
             IrOp::Or => "or",
+            IrOp::Not => "not",
         }
         .into()
     }

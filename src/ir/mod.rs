@@ -26,6 +26,7 @@ pub enum IrOp
     Gte,
     And,
     Or,
+    Not,
 }
 
 
