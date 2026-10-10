@@ -49,10 +49,17 @@ pub enum Expr<'src, D>
         kind: &'src str,
     },
 
-    /// Returns from the current function, `val` is `None` if nothing is returned
     Return
     {
         val: Option<Box<Node<'src, D>>>,
+    },
+
+    If
+    {
+        condition: Box<Node<'src, D>>,
+        body: Box<Node<'src, D>>,
+        elifs: Vec<(Node<'src, D>, Node<'src, D>)>, // List of Elif-tuples (condition, body)
+        else_body: Option<Box<Node<'src, D>>>,      // Body of the else
     },
 
     Chain(Vec<Node<'src, D>>),
@@ -217,6 +224,48 @@ where
         );
 
         chain
+    }
+
+    /// Parsers If statements with optional elif branches and an else block
+    fn if_parser<'t>(chain: impl P<'t, 'src, Node<'src, D>>) -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
+    {
+        let p_if = just(Token::If).ignore_then(chain.clone()).then(
+            chain
+                .clone()
+                .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+        );
+
+        let p_elif = just(Token::If)
+            .ignore_then(just(Token::Else))
+            .ignore_then(chain.clone())
+            .then(
+                chain
+                    .clone()
+                    .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+            );
+
+        let p_else = just(Token::Else).ignore_then(
+            chain
+                .clone()
+                .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+        );
+
+        //p_if, p_elif und p_else nun zu einem parser zusammenfassen, in den ein if vorkommen muss, dann eine beliebige menge an elif und dann optional ein else
+        p_if.then(p_elif.repeated().collect::<Vec<_>>())
+            .then(p_else.or_not())
+            .map_with(|(((cond, body), elifs), else_body), info| {
+                AstNode::new(
+                    Self::If {
+                        condition: todo!(),
+                        body: todo!(),
+                        elifs,
+                        else_body: else_body.map(Box::new),
+                    },
+                    info.span(),
+                )
+            })
     }
 
     fn binop(op: Binop, lhs: Node<'src, D>, rhs: Node<'src, D>, span: SimpleSpan) -> Node<'src, D>

@@ -355,6 +355,9 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(val)
             }
 
+            //TODO: Typecheck if statements
+            Expr::If { .. } => err!(span, "If statements are not supported yet"),
+
             Expr::ParseError =>
             {
                 err!(

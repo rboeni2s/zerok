@@ -180,6 +180,8 @@ fn generate_expr_ir<'a>(
             ir.jump(func.return_label());
         }
 
+        Expr::If { .. } => todo!("If statements are not implemented in the ir yet"),
+
         Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
     }
 }

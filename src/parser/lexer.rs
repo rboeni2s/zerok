@@ -7,6 +7,8 @@ pub const KW_NOP: &str = "keenop";
 pub const KW_AS: &str = "as";
 pub const KW_FN: &str = "op";
 pub const KW_RET: &str = "geve";
+pub const KW_IF: &str = "wenn";
+pub const KW_ELSE: &str = "anners";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -43,6 +45,8 @@ pub enum Token<'src>
     RBrace,
     Comma,
     Eq,
+    If,
+    Else,
 }
 
 
@@ -61,6 +65,8 @@ impl fmt::Display for Token<'_>
             Token::As => write!(f, "{KW_AS}"),
             Token::Fn => write!(f, "{KW_FN}"),
             Token::Return => write!(f, "{KW_RET}"),
+            Token::If => write!(f, "{KW_IF}"),
+            Token::Else => write!(f, "{KW_ELSE}"),
             Token::Semicolon => write!(f, ";"),
             Token::Doublecolon => write!(f, ":"),
             Token::Arrow => write!(f, "->"),
@@ -155,6 +161,8 @@ pub fn lexer<'src>()
             KW_AS => Token::As,
             KW_FN => Token::Fn,
             KW_RET => Token::Return,
+            KW_IF => Token::If,
+            KW_ELSE => Token::Else,
             _ => Token::Ident(ident),
         }
     });
