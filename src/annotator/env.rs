@@ -59,7 +59,8 @@ pub enum EnvEntry
 pub struct Env<'a, T>
 {
     parent: Option<Rc<Self>>,
-    ident_stack: RefCell<HashMap<&'a str, (Kind, usize)>>,
+    bindings: RefCell<HashMap<&'a str, (Kind, usize)>>,
+    functions: Rc<RefCell<HashMap<&'a str, (Kind, Vec<Kind>)>>>,
     store: Rc<Store<T>>,
 }
 
@@ -69,7 +70,8 @@ impl<'a, T> Default for Env<'a, T>
     fn default() -> Self
     {
         Self {
-            ident_stack: Default::default(),
+            bindings: Default::default(),
+            functions: Default::default(),
             store: Default::default(),
             parent: None,
         }
@@ -93,6 +95,23 @@ impl<'a, T> Env<'a, T>
         self.store.get(cell)
     }
 
+    /// Writes a function to the environment, if a function by that same name was already present it returns the old one
+    pub fn put_function(
+        &self,
+        name: &'a str,
+        ret: Kind,
+        args: Vec<Kind>,
+    ) -> Option<(Kind, Vec<Kind>)>
+    {
+        self.functions.borrow_mut().insert(name, (ret, args))
+    }
+
+    /// Returns a functions argument and return types, if it exists
+    pub fn get_function(&self, name: &'a str) -> Option<(Kind, Vec<Kind>)>
+    {
+        self.functions.borrow().get(name).cloned()
+    }
+
     /// Gets the entry of `cell`, panics if there is no cell or it does not exist
     pub fn get_unchecked(&self, cell: Option<usize>) -> T
     where
@@ -110,15 +129,16 @@ impl<'a, T> Env<'a, T>
     {
         Rc::new(Self {
             parent: Some(self.clone()),
-            ident_stack: Default::default(),
+            bindings: Default::default(),
             store: self.store.clone(),
+            functions: self.functions.clone(),
         })
     }
 
     /// Binds a store cell to a store entry
     pub fn bind_cell(&self, name: &'a str, annotation: &Annotation)
     {
-        self.ident_stack.borrow_mut().insert(
+        self.bindings.borrow_mut().insert(
             name,
             (
                 annotation.kind,
@@ -132,7 +152,7 @@ impl<'a, T> Env<'a, T>
     /// Gets the store cell `name`
     pub fn fetch_bound_cell(&self, name: &str) -> Option<(Kind, usize)>
     {
-        match self.ident_stack.borrow().get(name).copied()
+        match self.bindings.borrow().get(name).copied()
         {
             Some(binding) => Some(binding),
             None =>
