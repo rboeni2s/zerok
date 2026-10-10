@@ -1,3 +1,5 @@
+use crate::annotator::next_register;
+
 use super::{Expr, Node, P, Token};
 use chumsky::prelude::*;
 
@@ -24,6 +26,7 @@ pub struct Function<'src, D>
 
     /// The return type, `None` if the function does not return anything
     pub ret: Option<&'src str>,
+    pub ret_reg: usize,
 
     pub body: Node<'src, D>,
     pub span: SimpleSpan,
@@ -119,6 +122,7 @@ where
                     ret,
                     body,
                     span: info.span(),
+                    ret_reg: next_register(),
                 }
             });
 

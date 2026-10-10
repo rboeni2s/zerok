@@ -85,6 +85,8 @@ pub fn function<'a, D: Default>(
             })
             .collect(),
         ret,
+        // Not compared by PartialEq, so any register works
+        ret_reg: 0,
         body,
         span: Default::default(),
     }

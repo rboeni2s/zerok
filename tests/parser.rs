@@ -241,7 +241,10 @@ fn returns()
     // The returned value is a whole term, but not the rest of the chain
     assert_eq!(
         parse("return a + 2 * b; 3").unwrap(),
-        chain![ret(Some(add(binding("a"), mul(num(2), binding("b"))))), num(3)]
+        chain![
+            ret(Some(add(binding("a"), mul(num(2), binding("b"))))),
+            num(3)
+        ]
     );
     assert_eq!(
         parse("return (1; 2)").unwrap(),

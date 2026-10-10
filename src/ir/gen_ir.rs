@@ -40,14 +40,37 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
         ir.func(func.name, &params); // Genrate function head ir
         generate_expr_ir(&func.body, env, &mut ir, func); // Generate function body ir
 
-        // Generate the return ir
-        ir.label(func.return_label());
-        match env.get_function(func.name)
+        let Some((ret, _)) = env.get_function(func.name)
+        else
         {
-            Some((Kind::None, ..)) => ir.ret(EnvEntry::Atom(Atom::Int(0))),
-            Some((kind, ..)) => ir.ret(entry_of(&func.body, env)),
-            None => unreachable!("This function must exists because its is already generating"),
+            unreachable!("This function must exists because it is already generating ir...")
         };
+
+        let ret_val = {
+            // Functions without a return value or body always return 0 (in the IR), so the return register is not needed
+            if ret == Kind::None
+            {
+                // In this case, the function returns a placeholder 0 wich is never allowed to be used
+                EnvEntry::Atom(Atom::Int(0))
+            }
+            else
+            {
+                // If the function does have a body that evaluates to "something" that is written into a register...
+                if cell_of(&func.body).is_some()
+                {
+                    //... then move that value to the return register of the function
+                    ir.bind(entry_of(&func.body, env), func.ret_reg);
+                }
+
+                // In this case the function returns the return register
+                EnvEntry::Register(func.ret_reg)
+            }
+        };
+
+        // Returning is done jumping to this return label (with a return in zk) or reaching it naturally trough the function control flow
+        ir.label(func.return_label())
+            // Maybe some side_effect or deinit code comes here
+            .ret(ret_val);
     }
 
     ir.build()
@@ -152,7 +175,24 @@ fn generate_expr_ir<'a>(
             ir.call(*name, &args, register_of(expr, env));
         }
 
-        Expr::Return { .. } => todo!("Returns are not implemented in the ir yet"),
+        Expr::Return { val } =>
+        {
+            if let Some(val) = val
+            {
+                // A value of type none (e.g. "return kop") has no cell, so only its side effects are generated
+                if cell_of(val).is_none()
+                {
+                    generate_expr_ir(val, env, ir, func);
+                }
+                else
+                {
+                    let val = generate_operand_ir(val, env, ir, func);
+                    ir.bind(val, func.ret_reg);
+                }
+            }
+
+            ir.jump(func.return_label());
+        }
 
         Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
     }
