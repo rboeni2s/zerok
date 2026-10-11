@@ -5,6 +5,13 @@ op main()
          sling
          {
              wenn ja {rut 'outer}
+             anners {5;}
          }
-     }   
+     };
+
+     sling
+     {
+         sling {rut};
+         rut
+     }
 }

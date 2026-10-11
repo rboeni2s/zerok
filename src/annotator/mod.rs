@@ -490,20 +490,14 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 // replace the loop name with the label
                 *name = Some(env.enter_loop(loop_name));
-                body.annotate(&env.child_env());
+                body.annotate(&env.child_env())?;
                 env.exit_loop();
                 Ok(Annotation::default())
             }
 
             Expr::Break { name } =>
             {
-                let loop_name = match name
-                {
-                    Some(name) => name,
-                    None => "",
-                };
-
-                match env.is_in_loop(loop_name)
+                match env.is_in_loop(*name)
                 {
                     Some(label) =>
                     {

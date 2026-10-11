@@ -203,15 +203,18 @@ impl<'a, T> Env<'a, T>
             .to_string()
     }
 
-    /// Checks whether or not the env is in loop `name` and returns its unique label
-    pub fn is_in_loop(&self, name: &str) -> Option<String>
+    /// Checks whether or not the env is in loop `name` and returns its unique label,
+    /// `None` refers to the inner most loop, regardless of its name
+    pub fn is_in_loop(&self, name: Option<&str>) -> Option<String>
     {
-        self.loops
-            .borrow_mut()
-            .iter()
-            .rev()
-            .find(|(n, _)| n.as_str() == name)
-            .map(|(_, label)| label.to_string())
+        let loops = self.loops.borrow();
+
+        match name
+        {
+            Some(name) => loops.iter().rev().find(|(n, _)| n.as_str() == name),
+            None => loops.last(),
+        }
+        .map(|(_, label)| label.to_string())
     }
 
     /// Exits the inner most loop, returns `Some((loop_name, loop_label))` or `None` if this was called outside a loop
