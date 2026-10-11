@@ -61,6 +61,7 @@ pub struct Env<'a, T>
     parent: Option<Rc<Self>>,
     bindings: RefCell<HashMap<&'a str, (Kind, usize)>>,
     functions: Rc<RefCell<HashMap<&'a str, (Kind, Vec<Kind>)>>>,
+    loops: Rc<RefCell<Vec<(String, String)>>>, // (Name, Label)
     store: Rc<Store<T>>,
 
     /// The return type of the function this environment belongs to, `None` outside of functions
@@ -78,6 +79,7 @@ impl<'a, T> Default for Env<'a, T>
             store: Default::default(),
             parent: None,
             ret: None,
+            loops: Default::default(),
         }
     }
 }
@@ -137,6 +139,7 @@ impl<'a, T> Env<'a, T>
             store: self.store.clone(),
             functions: self.functions.clone(),
             ret: self.ret,
+            loops: self.loops.clone(),
         })
     }
 
@@ -149,6 +152,7 @@ impl<'a, T> Env<'a, T>
             store: self.store.clone(),
             functions: self.functions.clone(),
             ret: Some(ret),
+            loops: self.loops.clone(),
         })
     }
 
@@ -187,5 +191,30 @@ impl<'a, T> Env<'a, T>
                 }
             }
         }
+    }
+
+    /// Enters a loop
+    pub fn enter_loop(&self, name: String)
+    {
+        self.loops
+            .borrow_mut()
+            .push((name, format!("loop_{}", uuid::Uuid::new_v4().simple())))
+    }
+
+    /// Checks whether or not the env is in loop `name` and returns its unique label
+    pub fn is_in_loop(&self, name: &str) -> Option<String>
+    {
+        self.loops
+            .borrow_mut()
+            .iter()
+            .rev()
+            .find(|(n, _)| n.as_str() == name)
+            .map(|(_, label)| label.to_string())
+    }
+
+    /// Exits the inner most loop, returns `Some((loop_name, loop_label))` or `None` if this was called outside a loop
+    pub fn exit_loop(&self) -> Option<(String, String)>
+    {
+        self.loops.borrow_mut().pop()
     }
 }

@@ -23,8 +23,20 @@ use std::{fmt, rc::Rc, sync::atomic::AtomicUsize};
 pub use env::{Env, EnvEntry};
 pub use kind::Kind;
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Effect
+{
+    None,
+    Break
+    {
+        label: Rc<String>,
+    },
+}
+
+
 /// The Annotations for one ast node
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Annotation
 {
     /// Inferred or given type
@@ -32,6 +44,8 @@ pub struct Annotation
 
     /// store cell index
     pub cell: Option<usize>,
+
+    pub effect: Effect,
 }
 
 
@@ -42,6 +56,7 @@ impl Default for Annotation
         Self {
             kind: Kind::None,
             cell: None,
+            effect: Effect::None,
         }
     }
 }
@@ -123,7 +138,7 @@ impl<'a> Node<'a, Option<Annotation>>
         };
 
         let annotation = Self::annotate_chain(ast_nodes, env, expected)?;
-        self.data = Some(annotation);
+        self.data = Some(annotation.clone());
         Ok(annotation)
     }
 
@@ -204,6 +219,7 @@ impl<'a> Node<'a, Option<Annotation>>
                         Ok(Annotation {
                             kind: Kind::None,
                             cell: None,
+                            effect: Effect::None,
                         })
                     }
 
@@ -219,6 +235,7 @@ impl<'a> Node<'a, Option<Annotation>>
                         Ok(Annotation {
                             kind,
                             cell: Some(env.put(EnvEntry::Atom(atom.clone()))),
+                            effect: Effect::None,
                         })
                     }
                 }
@@ -248,6 +265,7 @@ impl<'a> Node<'a, Option<Annotation>>
                         Ok(Annotation {
                             kind: ret,
                             cell: Some(new_register(env)),
+                            effect: Effect::None,
                         })
                     }
                     None =>
@@ -274,6 +292,7 @@ impl<'a> Node<'a, Option<Annotation>>
                         Ok(Annotation {
                             kind: ret,
                             cell: Some(new_register(env)),
+                            effect: Effect::None,
                         })
                     }
 
@@ -294,6 +313,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 let annotation = Annotation {
                     kind,
                     cell: Some(new_register(env)),
+                    effect: Effect::None,
                 };
 
                 env.bind_cell(name, &annotation);
@@ -312,6 +332,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(Annotation {
                     kind,
                     cell: Some(cell),
+                    effect: Effect::None,
                 })
             }
 
@@ -338,6 +359,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(Annotation {
                     kind,
                     cell: Some(new_register(env)),
+                    effect: Effect::None,
                 })
             }
 
@@ -376,6 +398,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(Annotation {
                     kind: ret,
                     cell: Some(new_register(env)),
+                    effect: Effect::None,
                 })
             }
 
@@ -451,7 +474,53 @@ impl<'a> Node<'a, Option<Annotation>>
                         Ok(Annotation {
                             kind,
                             cell: (kind != Kind::None).then(|| new_register(env)),
+                            effect: Effect::None,
                         })
+                    }
+                }
+            }
+
+            Expr::Loop { name, body } =>
+            {
+                let loop_name = match name
+                {
+                    Some(name) => name.to_string(),
+                    None => "".into(),
+                };
+
+                env.enter_loop(loop_name);
+                body.annotate(&env.child_env());
+                env.exit_loop();
+                Ok(Annotation::default())
+            }
+
+            Expr::Break { name } =>
+            {
+                let loop_name = match name
+                {
+                    Some(name) => name,
+                    None => "",
+                };
+
+                match env.is_in_loop(&loop_name)
+                {
+                    Some(label) =>
+                    {
+                        Ok(Annotation {
+                            effect: Effect::Break {
+                                label: label.into(),
+                            },
+                            ..Default::default()
+                        })
+                    }
+
+                    None =>
+                    {
+                        err!(
+                            span,
+                            "Cannot break outside of a loop {}",
+                            name.unwrap_or_default()
+                        )
                     }
                 }
             }
@@ -465,7 +534,7 @@ impl<'a> Node<'a, Option<Annotation>>
             }
         }?;
 
-        self.data = Some(annotation);
+        self.data = Some(annotation.clone());
         Ok(annotation)
     }
 }

@@ -62,6 +62,17 @@ pub enum Expr<'src, D>
         else_body: Option<Box<Node<'src, D>>>,      // Body of the else
     },
 
+    Loop
+    {
+        name: Option<&'src str>,
+        body: Box<Node<'src, D>>,
+    },
+
+    Break
+    {
+        name: Option<&'src str>,
+    },
+
     Chain(Vec<Node<'src, D>>),
 
     // Placeholder for a something that could not be parsed.
@@ -148,6 +159,8 @@ where
                     call,
                     binding,
                     Self::if_parser(chain.clone()),
+                    Self::loop_parser(chain.clone()),
+                    Self::break_parser(),
                 ));
 
                 // Parse the different operators and set their associativity and precedence
@@ -275,6 +288,48 @@ where
                 )
             })
     }
+
+    fn loop_parser<'t>(chain: impl P<'t, 'src, Node<'src, D>>) -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
+    {
+        let ident = select! { Token::Ident(name) => name }.labelled("identifier");
+
+        let name = just(Token::Tick)
+            .ignore_then(ident)
+            .then_ignore(just(Token::Doublecolon));
+
+        name.or_not()
+            .then_ignore(just(Token::Loop))
+            .then(
+                chain
+                    .clone()
+                    .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+            )
+            .map_with(|(name, body), info| {
+                AstNode::new(
+                    Self::Loop {
+                        name,
+                        body: Box::new(body),
+                    },
+                    info.span(),
+                )
+            })
+    }
+
+    fn break_parser<'t>() -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
+    {
+        let ident = select! { Token::Ident(name) => name }.labelled("identifier");
+
+        let name = just(Token::Tick).ignore_then(ident);
+
+        just(Token::Break)
+            .ignore_then(name.or_not())
+            .map_with(|name, info| AstNode::new(Expr::Break { name }, info.span()))
+    }
+
 
     fn binop(op: Binop, lhs: Node<'src, D>, rhs: Node<'src, D>, span: SimpleSpan) -> Node<'src, D>
     {

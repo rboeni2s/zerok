@@ -1,5 +1,6 @@
 use super::{
-    P, Token,
+    P,
+    Token,
     lexer::{KW_FALSE, KW_TRUE},
 };
 use chumsky::prelude::*;

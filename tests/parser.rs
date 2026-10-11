@@ -273,7 +273,10 @@ fn returns()
 #[test]
 fn booleans()
 {
-    assert_eq!(parse("ja; nee").unwrap(), chain![boolean(true), boolean(false)]);
+    assert_eq!(
+        parse("ja; nee").unwrap(),
+        chain![boolean(true), boolean(false)]
+    );
     assert_eq!(
         parse("sett b: bool = ja").unwrap(),
         chain![decl("b", "bool", boolean(true))]

@@ -15,6 +15,7 @@
 op weekday(day: i32, month: i32, year: i32) -> i32
 {
     // januar und Februar zählen als Monat 13 und 14 des Vorjahres???.
+    // sett shift: i32 = (14 - month) / 12; // 1 für Jan oder Feb ansonsten 0
     sett shift: i32 = (14 - month) / 12; // 1 für Jan oder Feb ansonsten 0
     sett m: i32 = month + 12 * shift;
     sett y: i32 = year - shift;

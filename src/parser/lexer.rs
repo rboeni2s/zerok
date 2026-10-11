@@ -11,6 +11,8 @@ pub const KW_IF: &str = "wenn";
 pub const KW_ELSE: &str = "anners";
 pub const KW_TRUE: &str = "ja";
 pub const KW_FALSE: &str = "nee";
+pub const KW_LOOP: &str = "sling";
+pub const KW_BREAK: &str = "rut";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -31,6 +33,10 @@ pub enum Token<'src>
     Fn,
     Return,
     Nop,
+    If,
+    Else,
+    Loop,
+    Break,
 
     // Symbols
     Semicolon,
@@ -48,8 +54,7 @@ pub enum Token<'src>
     RBrace,
     Comma,
     Eq,
-    If,
-    Else,
+    Tick,
 }
 
 
@@ -87,6 +92,9 @@ impl fmt::Display for Token<'_>
             Token::RBrace => write!(f, "}}"),
             Token::Comma => write!(f, ","),
             Token::Eq => write!(f, "="),
+            Token::Loop => write!(f, "{KW_LOOP}"),
+            Token::Break => write!(f, "{KW_BREAK}"),
+            Token::Tick => write!(f, "'"),
         }
     }
 }
@@ -170,6 +178,8 @@ pub fn lexer<'src>()
             KW_ELSE => Token::Else,
             KW_TRUE => Token::Bool(true),
             KW_FALSE => Token::Bool(false),
+            KW_BREAK => Token::Break,
+            KW_LOOP => Token::Loop,
             _ => Token::Ident(ident),
         }
     });
@@ -191,6 +201,7 @@ pub fn lexer<'src>()
         just("}").to(Token::RBrace),
         just(",").to(Token::Comma),
         just("=").to(Token::Eq),
+        just("'").to(Token::Tick),
     ));
 
     let token = choice((float, num, string, ident, symbol))

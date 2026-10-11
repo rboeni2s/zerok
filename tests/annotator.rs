@@ -229,9 +229,15 @@ fn ifs()
 {
     // An if with an else has the type of its branches, without an else it has no value
     assert_eq!(kind_of("wenn ja { 1 } anners { 2 }"), Ok(Kind::I32));
-    assert_eq!(kind_of("wenn ja { 1 } wenn anners nee { 2 } anners { 3 }"), Ok(Kind::I32));
+    assert_eq!(
+        kind_of("wenn ja { 1 } wenn anners nee { 2 } anners { 3 }"),
+        Ok(Kind::I32)
+    );
     assert_eq!(kind_of("wenn ja { 1 }"), Ok(Kind::None));
-    assert_eq!(kind_of("wenn ja { 1 } wenn anners nee { 2 }"), Ok(Kind::None));
+    assert_eq!(
+        kind_of("wenn ja { 1 } wenn anners nee { 2 }"),
+        Ok(Kind::None)
+    );
 
     // The expected type is passed on to the branches
     assert_eq!(
@@ -251,9 +257,14 @@ fn ifs()
     assert!(kind_of("wenn ja { 1 } wenn anners nee { 1f }").is_ok());
 
     // Bindings of a condition are visible in its body and all later branches
-    assert_eq!(kind_of("wenn sett x: u32 = 5; ja { x } anners { x }"), Ok(Kind::U32));
     assert_eq!(
-        kind_of("wenn sett x: u32 = 5; nee { x } wenn anners sett y: u32 = x; ja { y } anners { x + y }"),
+        kind_of("wenn sett x: u32 = 5; ja { x } anners { x }"),
+        Ok(Kind::U32)
+    );
+    assert_eq!(
+        kind_of(
+            "wenn sett x: u32 = 5; nee { x } wenn anners sett y: u32 = x; ja { y } anners { x + y }"
+        ),
         Ok(Kind::U32)
     );
 
@@ -263,6 +274,14 @@ fn ifs()
     assert!(kind_of("wenn ja { sett y: i32 = 1; y } anners { y }").is_err());
 
     // A branch that returns has the return type of the function
-    assert!(check_program("op f(b: bool) -> i32 { wenn b { geve 1 } anners { 2 } } op main() {}").is_ok());
-    assert!(check_program("op f(b: bool) -> i32 { wenn b { 1 } anners { 2 } } op main() -> i32 { f(ja) + f(nee) }").is_ok());
+    assert!(
+        check_program("op f(b: bool) -> i32 { wenn b { geve 1 } anners { 2 } } op main() {}")
+            .is_ok()
+    );
+    assert!(
+        check_program(
+            "op f(b: bool) -> i32 { wenn b { 1 } anners { 2 } } op main() -> i32 { f(ja) + f(nee) }"
+        )
+        .is_ok()
+    );
 }

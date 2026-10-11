@@ -27,6 +27,7 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
             .map(|param| {
                 let cell = param
                     .data
+                    .as_ref()
                     .expect("A function parameter must be annotated")
                     .cell;
 
@@ -112,6 +113,7 @@ fn generate_expr_ir<'a>(
             if matches!(op, Binop::Mod | Binop::Pow)
                 && expr
                     .data
+                    .as_ref()
                     .is_some_and(|annotation| annotation.kind.is_float())
             {
                 todo!("The {op:?} operator is not implemented for floats in the ir yet");

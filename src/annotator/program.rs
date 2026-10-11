@@ -1,4 +1,4 @@
-use super::{Annotation, Env, EnvEntry, Kind, new_register};
+use super::{Annotation, Effect, Env, EnvEntry, Kind, new_register};
 use crate::{
     parser::{Function, Program},
     reg_util,
@@ -119,6 +119,7 @@ impl<'a> Function<'a, Option<Annotation>>
             let annotation = Annotation {
                 kind,
                 cell: Some(new_register(&fn_env)),
+                effect: Effect::None,
             };
 
             fn_env.bind_cell(param.name, &annotation);
