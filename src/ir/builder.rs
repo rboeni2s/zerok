@@ -104,6 +104,12 @@ impl IrBuilder
         self
     }
 
+    pub fn within(&mut self, f: impl Fn(&mut Self)) -> &mut Self
+    {
+        f(self);
+        self
+    }
+
     /// Returns the built chunks
     pub fn build(self) -> Vec<IrChunk>
     {

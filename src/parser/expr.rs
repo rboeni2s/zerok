@@ -64,7 +64,7 @@ pub enum Expr<'src, D>
 
     Loop
     {
-        name: Option<&'src str>,
+        name: Option<String>,
         body: Box<Node<'src, D>>,
     },
 
@@ -309,7 +309,7 @@ where
             .map_with(|(name, body), info| {
                 AstNode::new(
                     Self::Loop {
-                        name,
+                        name: name.map(|n| n.to_string()),
                         body: Box::new(body),
                     },
                     info.span(),

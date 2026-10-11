@@ -193,12 +193,14 @@ impl<'a, T> Env<'a, T>
         }
     }
 
-    /// Enters a loop
-    pub fn enter_loop(&self, name: String)
+    /// Enters a loop and returns its label
+    pub fn enter_loop(&self, name: String) -> String
     {
         self.loops
             .borrow_mut()
-            .push((name, format!("loop_{}", uuid::Uuid::new_v4().simple())))
+            .push_mut((name, format!("loop_{}", uuid::Uuid::new_v4().simple())))
+            .1
+            .to_string()
     }
 
     /// Checks whether or not the env is in loop `name` and returns its unique label

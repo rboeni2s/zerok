@@ -3,7 +3,7 @@ use crate::{
     Env,
     ExprAst,
     ProgAst,
-    annotator::{Annotation, EnvEntry, Kind},
+    annotator::{Annotation, Effect, EnvEntry, Kind},
     ir::IrReg,
     parser::{
         Expr,
@@ -273,6 +273,44 @@ fn generate_expr_ir<'a>(
             ir.jump(label_else)
                 .append(body_builder.build())
                 .label(label_finished);
+        }
+
+        Expr::Loop { name, body } =>
+        {
+            // A: Loop Start
+            // START_LABEL: Loop Body
+            // CONTINUE_LABEL: goto START_LABEL
+            // DONE_LABEL: ...
+
+            // fetch this loops label
+            let label = name
+                .as_ref()
+                .expect("I am inside a loop or the typechecker broke");
+
+            // use the loops label instead of `func.unique_label()` for all of these,
+            // even thought it is actually just needed for return and continue. This way all
+            // the loops labels have a consistent naming scheme. (But ofc this does not matter for the start label...)
+            let start_label = &format!("start_{label}");
+            let continue_label = &format!("continue_{label}");
+            let done_label = &format!("done_{label}");
+
+            ir.label(start_label)
+                .within(|ir| generate_expr_ir(body, env, ir, func))
+                .label(continue_label)
+                .jump(start_label)
+                .label(done_label);
+        }
+
+        Expr::Break { name } =>
+        {
+            // fetch the label of the loop, that should be "breaked"
+            let Effect::Break { ref label } = expr.data.as_ref().expect("This is annotated").effect
+            else
+            {
+                unreachable!("This break must have a break effect or the typechecker broke")
+            };
+
+            ir.jump(format!("done_{label}"));
         }
 
         Expr::ParseError => unreachable!("The typechecker already denies parser errors"),

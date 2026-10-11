@@ -488,7 +488,8 @@ impl<'a> Node<'a, Option<Annotation>>
                     None => "".into(),
                 };
 
-                env.enter_loop(loop_name);
+                // replace the loop name with the label
+                *name = Some(env.enter_loop(loop_name));
                 body.annotate(&env.child_env());
                 env.exit_loop();
                 Ok(Annotation::default())
@@ -502,7 +503,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     None => "",
                 };
 
-                match env.is_in_loop(&loop_name)
+                match env.is_in_loop(loop_name)
                 {
                     Some(label) =>
                     {

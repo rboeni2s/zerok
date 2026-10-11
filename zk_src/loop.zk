@@ -1,0 +1,10 @@
+op main()
+{
+     'outer: sling
+     {
+         sling
+         {
+             rut 'outer
+         }
+     }   
+}

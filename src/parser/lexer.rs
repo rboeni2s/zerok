@@ -160,9 +160,9 @@ pub fn lexer<'src>()
         .unwrapped()
         .map(Token::Float);
 
-    let string = one_of("\"'")
-        .ignore_then(none_of("\"'").repeated().to_slice())
-        .then_ignore(one_of("\"'"))
+    let string = one_of("\"")
+        .ignore_then(none_of("\"").repeated().to_slice())
+        .then_ignore(one_of("\""))
         .map(Token::Str);
 
     // Identifiers are lexed as a whole, so that keywords are only recognized if they are not a prefix of an identifier
