@@ -74,7 +74,10 @@ impl<'a> Node<'a, Option<Annotation>>
         {
             Expr::Atom(atom) => matches!(atom, Atom::Int(_) | Atom::Float(_)),
             Expr::Unaop { val, .. } => val.is_untyped_literal(),
-            Expr::Binop { lhs, rhs, .. } => lhs.is_untyped_literal() && rhs.is_untyped_literal(),
+            Expr::Binop { op, lhs, rhs } =>
+            {
+                !op.is_comparison() && lhs.is_untyped_literal() && rhs.is_untyped_literal()
+            }
             Expr::Chain(ast_nodes) => ast_nodes.last().is_some_and(|ast| ast.is_untyped_literal()),
             _ => false,
         }
@@ -247,8 +250,10 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Binop { op, lhs, rhs } =>
             {
-                // All operators return the type of their operands, so the expected type is passed on to the operands.
+                // All operators except comparisons return the type of their operands, so the expected type is passed on to the operands.
                 // Untyped literals take the type of the other operand, so the operand with a known type is annotated first
+                let expected = if op.is_comparison() { None } else { expected };
+
                 let (lhs, rhs) = if lhs.is_untyped_literal() && !rhs.is_untyped_literal()
                 {
                     let rhs = rhs.annotate_expecting(&env.child_env(), expected)?.kind;

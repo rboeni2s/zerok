@@ -432,6 +432,12 @@ fn binop_to_ir(op: &Binop) -> IrOp
         Binop::Sub => IrOp::Sub,
         Binop::Mul => IrOp::Mul,
         Binop::Div => IrOp::Div,
+        Binop::Eq => IrOp::Eq,
+        Binop::Neq => IrOp::Neq,
+        Binop::Lt => IrOp::Lt,
+        Binop::Gt => IrOp::Gt,
+        Binop::Lte => IrOp::Lte,
+        Binop::Gte => IrOp::Gte,
 
         Binop::Mod | Binop::Pow => unreachable!("{op:?} is built from multiple chunks"),
     }

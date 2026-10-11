@@ -177,21 +177,25 @@ where
 
                 // Parse the different operators and set their associativity and precedence
                 let operation = operand.pratt((
+                    // "a + 1 < b * 2" is "(a + 1) < (b * 2)"
+                    infix(left(0), Binop::compare(), |lhs, op, rhs, info| {
+                        Self::binop(op, lhs, rhs, info.span())
+                    }),
                     infix(
-                        left(0),
+                        left(1),
                         Binop::add().or(Binop::sub()),
                         |lhs, op, rhs, info| Self::binop(op, lhs, rhs, info.span()),
                     ),
                     infix(
-                        left(1),
+                        left(2),
                         choice((Binop::mul(), Binop::div(), Binop::modulo())),
                         |lhs, op, rhs, info| Self::binop(op, lhs, rhs, info.span()),
                     ),
-                    infix(right(4), Binop::pow(), |lhs, op, rhs, info| {
+                    infix(right(5), Binop::pow(), |lhs, op, rhs, info| {
                         Self::binop(op, lhs, rhs, info.span())
                     }),
                     // "-a as u32" is "(-a) as u32" and "a * b as u32" is "a * (b as u32)"
-                    postfix(2, just(Token::As).ignore_then(ident), |val, kind, info| {
+                    postfix(3, just(Token::As).ignore_then(ident), |val, kind, info| {
                         AstNode::new(
                             Self::Cast {
                                 val: Box::new(val),
@@ -200,7 +204,7 @@ where
                             info.span(),
                         )
                     }),
-                    prefix(3, Unaop::neg(), |op, val, info| {
+                    prefix(4, Unaop::neg(), |op, val, info| {
                         AstNode::new(
                             Self::Unaop {
                                 op,
