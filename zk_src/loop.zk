@@ -1,17 +1,19 @@
-op main()
+op main() -> u32
 {
+    sett counter: u32 = 0;
+    
      'outer: sling
      {
+         counter = counter + 1;
+         
          sling
          {
-             wenn ja {rut 'outer}
-             anners {5;}
+            counter = counter + 1;
+            rut 'outer
          }
      };
 
-     sling
-     {
-         sling {rut};
-         rut
-     }
+     ((5 + 1); counter) = counter + 1;
+     
+     counter
 }

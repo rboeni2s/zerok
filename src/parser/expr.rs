@@ -73,6 +73,17 @@ pub enum Expr<'src, D>
         name: Option<&'src str>,
     },
 
+    Continue
+    {
+        name: Option<&'src str>,
+    },
+
+    Assign
+    {
+        target: Box<Node<'src, D>>,
+        source: Box<Node<'src, D>>,
+    },
+
     Chain(Vec<Node<'src, D>>),
 
     // Placeholder for a something that could not be parsed.
@@ -161,10 +172,11 @@ where
                     Self::if_parser(chain.clone()),
                     Self::loop_parser(chain.clone()),
                     Self::break_parser(),
+                    Self::continue_parser(),
                 ));
 
                 // Parse the different operators and set their associativity and precedence
-                operand.pratt((
+                let operation = operand.pratt((
                     infix(
                         left(0),
                         Binop::add().or(Binop::sub()),
@@ -197,7 +209,28 @@ where
                             info.span(),
                         )
                     }),
-                ))
+                ));
+
+                // An assignment binds weaker than every operator, so its target can be any expression, e.g. "(f(); x) = 5".
+                // The typechecker decides whether the target is actually assignable
+                operation
+                    .then(just(Token::Eq).ignore_then(term.clone()).or_not())
+                    .map_with(|(target, source), info| {
+                        match source
+                        {
+                            Some(source) =>
+                            {
+                                AstNode::new(
+                                    Self::Assign {
+                                        target: Box::new(target),
+                                        source: Box::new(source),
+                                    },
+                                    info.span(),
+                                )
+                            }
+                            None => target,
+                        }
+                    })
             }
         });
 
@@ -328,6 +361,19 @@ where
         just(Token::Break)
             .ignore_then(name.or_not())
             .map_with(|name, info| AstNode::new(Expr::Break { name }, info.span()))
+    }
+
+    fn continue_parser<'t>() -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
+    {
+        let ident = select! { Token::Ident(name) => name }.labelled("identifier");
+
+        let name = just(Token::Tick).ignore_then(ident);
+
+        just(Token::Continue)
+            .ignore_then(name.or_not())
+            .map_with(|name, info| AstNode::new(Expr::Continue { name }, info.span()))
     }
 
 

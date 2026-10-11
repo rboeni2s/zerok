@@ -78,7 +78,7 @@ fn casts()
     assert_eq!(kind_of("5 as f64"), Ok(Kind::F64));
 
     // Only numbers can be cast
-    assert!(kind_of("'text' as u32").is_err());
+    assert!(kind_of(r#""text" as u32"#).is_err());
     assert!(kind_of("1 as string").is_err());
     assert!(kind_of("1 as foo").is_err());
 }

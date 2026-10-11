@@ -313,6 +313,26 @@ fn generate_expr_ir<'a>(
             ir.jump(format!("done_{label}"));
         }
 
+        Expr::Continue { name } =>
+        {
+            // fetch the label of the loop, that should be continued
+            let Effect::Continue { ref label } =
+                expr.data.as_ref().expect("This is annotated").effect
+            else
+            {
+                unreachable!("This continue must have a continue effect or the typechecker broke")
+            };
+
+            ir.jump(format!("continue_{label}"));
+        }
+
+        Expr::Assign { target, source } =>
+        {
+            generate_expr_ir(target, env, ir, func);
+            let source = generate_operand_ir(source, env, ir, func);
+            ir.bind(source, register_of(expr, env));
+        }
+
         Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
     }
 }

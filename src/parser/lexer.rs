@@ -13,6 +13,7 @@ pub const KW_TRUE: &str = "ja";
 pub const KW_FALSE: &str = "nee";
 pub const KW_LOOP: &str = "sling";
 pub const KW_BREAK: &str = "rut";
+pub const KW_CONTINUE: &str = "over";
 
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -37,6 +38,7 @@ pub enum Token<'src>
     Else,
     Loop,
     Break,
+    Continue,
 
     // Symbols
     Semicolon,
@@ -94,6 +96,7 @@ impl fmt::Display for Token<'_>
             Token::Eq => write!(f, "="),
             Token::Loop => write!(f, "{KW_LOOP}"),
             Token::Break => write!(f, "{KW_BREAK}"),
+            Token::Continue => write!(f, "{KW_CONTINUE}"),
             Token::Tick => write!(f, "'"),
         }
     }
@@ -179,6 +182,7 @@ pub fn lexer<'src>()
             KW_TRUE => Token::Bool(true),
             KW_FALSE => Token::Bool(false),
             KW_BREAK => Token::Break,
+            KW_CONTINUE => Token::Continue,
             KW_LOOP => Token::Loop,
             _ => Token::Ident(ident),
         }

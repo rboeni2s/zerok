@@ -32,6 +32,10 @@ pub enum Effect
     {
         label: Rc<String>,
     },
+    Continue
+    {
+        label: Rc<String>,
+    },
 }
 
 
@@ -517,6 +521,45 @@ impl<'a> Node<'a, Option<Annotation>>
                             name.unwrap_or_default()
                         )
                     }
+                }
+            }
+
+            Expr::Continue { name } =>
+            {
+                match env.is_in_loop(*name)
+                {
+                    Some(label) =>
+                    {
+                        Ok(Annotation {
+                            effect: Effect::Continue {
+                                label: label.into(),
+                            },
+                            ..Default::default()
+                        })
+                    }
+
+                    None =>
+                    {
+                        err!(
+                            span,
+                            "Cannot continue outside of a loop {}",
+                            name.unwrap_or_default()
+                        )
+                    }
+                }
+            }
+
+            Expr::Assign { target, source } =>
+            {
+                let target = target.annotate(env)?;
+                let source = source.annotate_as(env, target.kind, "This Value")?;
+
+                let target_cell = target.cell.and_then(|c| env.get(c));
+
+                match matches!(target_cell, None | Some(EnvEntry::Atom(_)))
+                {
+                    true => err!(span, "Value is not assignable"),
+                    false => Ok(target),
                 }
             }
 
