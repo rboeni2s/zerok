@@ -65,6 +65,7 @@ pub enum Expr<'src, D>
     Loop
     {
         name: Option<String>,
+        head: Option<Box<Node<'src, D>>>, // The loop evaluates to the value of its head, e.g. "sling sett x: u32 = 0 { ... }"
         body: Box<Node<'src, D>>,
     },
 
@@ -338,15 +339,24 @@ where
 
         name.or_not()
             .then_ignore(just(Token::Loop))
+            .then(chain.clone())
             .then(
                 chain
                     .clone()
                     .delimited_by(just(Token::LBrace), just(Token::RBrace)),
             )
-            .map_with(|(name, body), info| {
+            .map_with(|((name, head), body), info| {
+                // A missing head is parsed as an empty chain
+                let head = match &head.inner
+                {
+                    Self::Chain(nodes) if nodes.is_empty() => None,
+                    _ => Some(Box::new(head)),
+                };
+
                 AstNode::new(
                     Self::Loop {
                         name: name.map(|n| n.to_string()),
+                        head,
                         body: Box::new(body),
                     },
                     info.span(),

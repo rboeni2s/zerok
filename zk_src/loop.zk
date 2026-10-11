@@ -1,18 +1,13 @@
 op main() -> u32
 {
-    sett counter: u32 = 0;
-
-    'outer: sling
+    sling (sett counter: u32 = 0)
     {
-        sett inner_counter: u32 = 0;
-        counter = counter + 1;
-
-        sling
+        counter = sling (sett inner_counter: u32 = 0)
         {
-            wenn inner_counter >= 5 {rut 'outer};
-            counter = counter + 1;
+            wenn inner_counter >= 5 {rut};
             inner_counter = inner_counter + 1;
-        }
-    };
-    counter
+        };
+
+        rut
+    }    
 }

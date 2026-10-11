@@ -275,8 +275,9 @@ fn generate_expr_ir<'a>(
                 .label(label_finished);
         }
 
-        Expr::Loop { name, body } =>
+        Expr::Loop { name, head, body } =>
         {
+            // HEAD: head
             // A: Loop Start
             // START_LABEL: Loop Body
             // CONTINUE_LABEL: goto START_LABEL
@@ -293,6 +294,11 @@ fn generate_expr_ir<'a>(
             let start_label = &format!("start_{label}");
             let continue_label = &format!("continue_{label}");
             let done_label = &format!("done_{label}");
+
+            if let Some(head) = head
+            {
+                generate_expr_ir(head, env, ir, func);
+            }
 
             ir.label(start_label)
                 .within(|ir| generate_expr_ir(body, env, ir, func))

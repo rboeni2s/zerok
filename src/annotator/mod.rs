@@ -144,7 +144,14 @@ impl<'a> Node<'a, Option<Annotation>>
             return self.annotate_expecting(env, expected);
         };
 
-        let annotation = Self::annotate_chain(ast_nodes, env, expected)?;
+        let annotation = match ast_nodes.as_mut_slice()
+        {
+            // A chain that only wraps another node does not open a scope either,
+            // so parentheses around the whole condition do not hide its bindings, e.g. "sling (sett x: u32 = 0) { x }"
+            [node] => node.annotate_in_scope(env, expected)?,
+            ast_nodes => Self::annotate_chain(ast_nodes, env, expected)?,
+        };
+
         self.data = Some(annotation.clone());
         Ok(annotation)
     }
@@ -489,7 +496,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 }
             }
 
-            Expr::Loop { name, body } =>
+            Expr::Loop { name, head, body } =>
             {
                 let loop_name = match name
                 {
@@ -497,11 +504,29 @@ impl<'a> Node<'a, Option<Annotation>>
                     None => "".into(),
                 };
 
+                // The bindings of the head are visible in the body, e.g. "sling sett x: u32 = 0 { x = x + 1 }".
+                // The head is evaluated once before the loop and the loop evaluates to the cell of the head,
+                // so changes to that cell in the body are visible in the value of the loop
+                let scope = env.child_env();
+                let annotation = match head
+                {
+                    Some(head) =>
+                    {
+                        Annotation {
+                            effect: Effect::None,
+                            ..head.annotate_in_scope(&scope, expected)?
+                        }
+                    }
+                    None => Annotation::default(),
+                };
+
                 // replace the loop name with the label
                 *name = Some(env.enter_loop(loop_name));
-                body.annotate(&env.child_env())?;
+                let body_result = body.annotate(&scope.child_env());
                 env.exit_loop();
-                Ok(Annotation::default())
+                body_result?;
+
+                Ok(annotation)
             }
 
             Expr::Break { name } =>
