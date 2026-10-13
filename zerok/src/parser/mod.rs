@@ -38,7 +38,7 @@ where
     let input_end = SimpleSpan::from(src.len()..src.len());
 
     let (program, parse_errors) = Program::parser()
-        .parse({ tokens.split_token_span(input_end) })
+        .parse(tokens.split_token_span(input_end))
         .into_output_errors();
 
     finish(src, src_path, program, &parse_errors, lex_errors)
@@ -54,7 +54,7 @@ where
     let input_end = SimpleSpan::from(src.len()..src.len());
 
     let (ast, parse_errors) = Expr::parser()
-        .parse({ tokens.split_token_span(input_end) })
+        .parse(tokens.split_token_span(input_end))
         .into_output_errors();
 
     finish(src, src_path, ast, &parse_errors, lex_errors)

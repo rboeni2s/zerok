@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 pub mod annotator;
 pub mod diagnostic;
 pub mod gen_ir;

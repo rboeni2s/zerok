@@ -333,7 +333,7 @@ fn generate_expr_ir<'a>(
                 .label(done_label);
         }
 
-        Expr::Break { name } =>
+        Expr::Break { name: _ } =>
         {
             // fetch the label of the loop, that should be "breaked"
             let Effect::Break { ref label } = expr.data.as_ref().expect("This is annotated").effect
@@ -345,7 +345,7 @@ fn generate_expr_ir<'a>(
             ir.jump(format!("done_{label}"));
         }
 
-        Expr::Continue { name } =>
+        Expr::Continue { name: _ } =>
         {
             // fetch the label of the loop, that should be continued
             let Effect::Continue { ref label } =

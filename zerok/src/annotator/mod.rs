@@ -17,7 +17,7 @@ use crate::{
 };
 use chumsky::span::SimpleSpan;
 use kind::{binop_compat, cast_compat, unaop_compat};
-use std::{fmt, rc::Rc, sync::atomic::AtomicUsize};
+use std::{fmt, rc::Rc};
 
 
 pub use env::{Env, EnvEntry};
@@ -582,7 +582,7 @@ impl<'a> Node<'a, Option<Annotation>>
             Expr::Assign { target, source } =>
             {
                 let target = target.annotate(env)?;
-                let source = source.annotate_as(env, target.kind, "This Value")?;
+                let _source = source.annotate_as(env, target.kind, "This Value")?;
 
                 let target_cell = target.cell.and_then(|c| env.get(c));
 

@@ -1,8 +1,5 @@
 use crate::annotator::{Env, EnvEntry};
-use std::{
-    ops::Deref,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 
 const FUNCTION_REGISTER_RANGE_START: usize = u8::MAX as usize + 1;

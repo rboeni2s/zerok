@@ -123,7 +123,8 @@ pub fn binop_compat<'a>(op: &Binop, lhs: Kind, rhs: Kind, _env: &Env<'a, EnvEntr
         {
             Some(lhs)
         }
-        (Binop::Eq | Binop::Neq, lhs, rhs) if lhs == rhs && (lhs.is_numeric() || lhs == Kind::Bool) =>
+        (Binop::Eq | Binop::Neq, lhs, rhs)
+            if lhs == rhs && (lhs.is_numeric() || lhs == Kind::Bool) =>
         {
             Some(Kind::Bool)
         }

@@ -1,4 +1,3 @@
-use crate::reg_util::next_register;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{Expr, Node, P, Token};
