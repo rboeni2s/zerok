@@ -1,23 +1,32 @@
 use super::{IrChunk, IrOp, IrReg};
-use crate::annotator::EnvEntry;
 
 
-#[derive(Default)]
-pub struct IrBuilder
+pub struct IrBuilder<T>
 {
-    chunks: Vec<IrChunk>,
+    chunks: Vec<IrChunk<T>>,
 }
 
 
-impl IrBuilder
+impl<T> Default for IrBuilder<T>
 {
-    pub fn chunk(&mut self, chunk: IrChunk) -> &mut Self
+    fn default() -> Self
+    {
+        Self {
+            chunks: Default::default(),
+        }
+    }
+}
+
+
+impl<T> IrBuilder<T>
+{
+    pub fn chunk(&mut self, chunk: IrChunk<T>) -> &mut Self
     {
         self.chunks.push(chunk);
         self
     }
 
-    pub fn binop(&mut self, op: IrOp, lhs: EnvEntry, rhs: EnvEntry, reg: usize) -> &mut Self
+    pub fn binop(&mut self, op: IrOp, lhs: T, rhs: T, reg: usize) -> &mut Self
     {
         self.chunks.push(IrChunk::Bin {
             op,
@@ -29,7 +38,7 @@ impl IrBuilder
         self
     }
 
-    pub fn unaop(&mut self, op: IrOp, arg: EnvEntry, reg: usize) -> &mut Self
+    pub fn unaop(&mut self, op: IrOp, arg: T, reg: usize) -> &mut Self
     {
         self.chunks.push(IrChunk::Una {
             op,
@@ -40,7 +49,7 @@ impl IrBuilder
         self
     }
 
-    pub fn bind(&mut self, val: EnvEntry, reg: usize) -> &mut Self
+    pub fn bind(&mut self, val: T, reg: usize) -> &mut Self
     {
         self.chunks.push(IrChunk::Bind {
             val,
@@ -60,7 +69,9 @@ impl IrBuilder
         self
     }
 
-    pub fn call(&mut self, name: impl Into<String>, args: &[EnvEntry], reg: usize) -> &mut Self
+    pub fn call(&mut self, name: impl Into<String>, args: &[T], reg: usize) -> &mut Self
+    where
+        T: Clone,
     {
         self.chunks.push(IrChunk::Call {
             name: name.into(),
@@ -71,7 +82,7 @@ impl IrBuilder
         self
     }
 
-    pub fn ret(&mut self, val: EnvEntry) -> &mut Self
+    pub fn ret(&mut self, val: T) -> &mut Self
     {
         self.chunks.push(IrChunk::Ret { val });
         self
@@ -89,7 +100,7 @@ impl IrBuilder
         self
     }
 
-    pub fn conditional_jump(&mut self, val: EnvEntry, name: impl Into<String>) -> &mut Self
+    pub fn conditional_jump(&mut self, val: T, name: impl Into<String>) -> &mut Self
     {
         self.chunk(IrChunk::CondJump {
             val,
@@ -98,7 +109,7 @@ impl IrBuilder
         self
     }
 
-    pub fn append(&mut self, chunks: Vec<IrChunk>) -> &mut Self
+    pub fn append(&mut self, chunks: Vec<IrChunk<T>>) -> &mut Self
     {
         self.chunks.extend(chunks);
         self
@@ -111,7 +122,7 @@ impl IrBuilder
     }
 
     /// Returns the built chunks
-    pub fn build(self) -> Vec<IrChunk>
+    pub fn build(self) -> Vec<IrChunk<T>>
     {
         self.chunks
     }

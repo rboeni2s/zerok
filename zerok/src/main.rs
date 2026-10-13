@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use chumsky::error::Rich;
+use ir::ToIIC;
 use std::{process::ExitCode, rc::Rc};
 use zerok::{
     annotator::{self, Annotation, EnvEntry},
     diagnostic,
-    ir::{ToIIC, generate_ir},
+    gen_ir::generate_ir,
     parser,
 };
 
@@ -48,12 +49,7 @@ fn run() -> Result<()>
         return Err(anyhow::anyhow!("Type Error"));
     }
 
-    // dbg!(&program);
-
     let ir = generate_ir(&program, &env);
-
-    // dbg!(&ir);
-
     println!("{}", ir.to_iic());
 
     Ok(())

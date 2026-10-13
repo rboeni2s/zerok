@@ -1,10 +1,8 @@
-use super::{IrBuilder, IrChunk, IrOp};
 use crate::{
     Env,
     ExprAst,
     ProgAst,
     annotator::{Annotation, Effect, EnvEntry, Kind},
-    ir::IrReg,
     parser::{
         Expr,
         Function,
@@ -13,11 +11,39 @@ use crate::{
     },
     reg_util::{self, Reserved},
 };
+use ir::{IrBuilder, IrOp, IrReg, ToIIC};
 
 
-pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
+impl ToIIC for EnvEntry
 {
-    let mut ir = IrBuilder::default();
+    fn to_iic(&self) -> String
+    {
+        match self
+        {
+            EnvEntry::Register(reg) => format!("R{reg}"),
+            EnvEntry::Atom(atom) =>
+            {
+                match atom
+                {
+                    Atom::Str(_) =>
+                    {
+                        todo!(
+                            "IIC string repräsentationen sind noch nicht implementiert, aber wahrscheinlich [char]"
+                        )
+                    }
+                    Atom::Int(num) => num.to_string(),
+                    Atom::Float(num) => (*num as u64).to_string(),
+                    Atom::Bool(b) => u64::from(*b).to_string(),
+                    Atom::Nop => unreachable!("Für ein nop sollte nie code generiert werden"),
+                }
+            }
+        }
+    }
+}
+
+pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<ir::IrChunk<EnvEntry>>
+{
+    let mut ir = IrBuilder::<EnvEntry>::default();
 
     for func in &prog.functions
     {
@@ -82,7 +108,7 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk>
 fn generate_expr_ir<'a>(
     expr: &ExprAst<'a>,
     env: &Env<'a>,
-    ir: &mut IrBuilder,
+    ir: &mut IrBuilder<EnvEntry>,
     func: &Function<'a, Option<Annotation>>,
 )
 {
@@ -348,7 +374,7 @@ fn generate_expr_ir<'a>(
 fn generate_operand_ir<'a>(
     expr: &ExprAst<'a>,
     env: &Env<'a>,
-    ir: &mut IrBuilder,
+    ir: &mut IrBuilder<EnvEntry>,
     func: &Function<'a, Option<Annotation>>,
 ) -> EnvEntry
 {
@@ -367,7 +393,7 @@ fn generate_pow_ir<'a>(
     base: EnvEntry,
     exp: EnvEntry,
     reg: usize,
-    ir: &mut IrBuilder,
+    ir: &mut IrBuilder<EnvEntry>,
     func: &Function<'a, Option<Annotation>>,
 )
 {

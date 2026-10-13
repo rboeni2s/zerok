@@ -1,14 +1,10 @@
+#![feature(iter_intersperse)]
+
 mod builder;
-mod gen_ir;
 mod iic;
 
-
 pub use builder::IrBuilder;
-pub use gen_ir::generate_ir;
 pub use iic::ToIIC;
-
-
-use crate::annotator::EnvEntry;
 
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -39,24 +35,24 @@ pub enum IrReg
 
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IrChunk
+pub enum IrChunk<T>
 {
     Bin
     {
         op: IrOp,
-        lhs: EnvEntry,
-        rhs: EnvEntry,
+        lhs: T,
+        rhs: T,
         reg: IrReg,
     },
 
     Una
     {
-        op: IrOp, arg: EnvEntry, reg: IrReg
+        op: IrOp, arg: T, reg: IrReg
     },
 
     Bind
     {
-        val: EnvEntry, reg: IrReg
+        val: T, reg: IrReg
     },
 
     Func
@@ -67,13 +63,13 @@ pub enum IrChunk
     Call
     {
         name: String,
-        args: Vec<EnvEntry>,
+        args: Vec<T>,
         reg: IrReg,
     },
 
     Ret
     {
-        val: EnvEntry
+        val: T
     },
 
     Label
@@ -88,6 +84,6 @@ pub enum IrChunk
 
     CondJump
     {
-        val: EnvEntry, name: String
+        val: T, name: String
     },
 }

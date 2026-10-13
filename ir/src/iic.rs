@@ -1,47 +1,22 @@
-use std::fmt::format;
-
 use super::{IrChunk, IrOp, IrReg};
-use crate::annotator::EnvEntry;
-use crate::parser::atom::Atom;
 
 
 pub trait ToIIC
 {
+    const SEPERATOR: &str = ", ";
     fn to_iic(&self) -> String;
 }
 
 
-impl ToIIC for Vec<IrReg>
+impl<T> ToIIC for Vec<T>
+where
+    T: ToIIC,
 {
     fn to_iic(&self) -> String
     {
         self.iter()
             .map(|e| e.to_iic())
-            .intersperse(", ".to_string())
-            .collect()
-    }
-}
-
-
-impl ToIIC for Vec<EnvEntry>
-{
-    fn to_iic(&self) -> String
-    {
-        self.iter()
-            .map(|e| e.to_iic())
-            .intersperse(", ".to_string())
-            .collect()
-    }
-}
-
-
-impl ToIIC for Vec<IrChunk>
-{
-    fn to_iic(&self) -> String
-    {
-        self.iter()
-            .map(|e| e.to_iic())
-            .intersperse("\n".to_string())
+            .intersperse(T::SEPERATOR.to_string())
             .collect()
     }
 }
@@ -84,37 +59,13 @@ impl ToIIC for IrReg
     }
 }
 
-
-impl ToIIC for EnvEntry
+impl<T> ToIIC for IrChunk<T>
+where
+    T: ToIIC,
+    Vec<T>: ToIIC,
 {
-    fn to_iic(&self) -> String
-    {
-        match self
-        {
-            EnvEntry::Register(reg) => format!("R{reg}"),
-            EnvEntry::Atom(atom) =>
-            {
-                match atom
-                {
-                    Atom::Str(_) =>
-                    {
-                        todo!(
-                            "IIC string repräsentationen sind noch nicht implementiert, aber wahrscheinlich [char]"
-                        )
-                    }
-                    Atom::Int(num) => num.to_string(),
-                    Atom::Float(num) => (*num as u64).to_string(),
-                    Atom::Bool(b) => u64::from(*b).to_string(),
-                    Atom::Nop => unreachable!("Für ein nop sollte nie code generiert werden"),
-                }
-            }
-        }
-    }
-}
+    const SEPERATOR: &str = "\n";
 
-
-impl ToIIC for IrChunk
-{
     fn to_iic(&self) -> String
     {
         match self
