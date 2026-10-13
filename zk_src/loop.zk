@@ -2,7 +2,7 @@ op main() -> u32
 {
     sling (sett counter: u32 = 0)
     {
-        counter = sling (sett inner_counter: u32 = 0)
+        counter = sling sett inner_counter: u32 = 0
         {
             wenn inner_counter >= 5 {rut};
             inner_counter = inner_counter + 1;
