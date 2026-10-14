@@ -151,8 +151,6 @@ impl Parse for IicOp
 }
 
 
-/// An operand: `R(expr)` becomes a register through `ToIrReg`,
-/// any other expression becomes a value through `ToIrVal`
 enum IicVal
 {
     Reg(syn::Expr),
@@ -183,9 +181,7 @@ enum IicChunk
     // reg = op arg
     Una
     {
-        op: IicOp,
-        arg: IicVal,
-        reg: IicReg,
+        op: IicOp, arg: IicVal, reg: IicReg
     },
 
     // reg = val
@@ -593,20 +589,9 @@ impl ToTokens for IicChunk
     }
 }
 
-
-/// Builds a `Vec<ir::IrChunk<T>>` from IIC like source:
-///
-/// ```ignore
-/// let chunks = iic_quote! {
-///     define name(R(0), R(1)):
-///     R(2) = R(0) + 1u64;
-///     ret R(2)
-/// };
-/// ```
 #[proc_macro]
 pub fn iic_quote(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 {
     let IicChunks(chunks) = syn::parse_macro_input!(input as IicChunks);
-
     quote!(::std::vec![#(#chunks),*]).into()
 }
