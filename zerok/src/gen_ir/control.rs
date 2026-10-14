@@ -82,7 +82,7 @@ impl<'a> GenEnv<'_, 'a>
 
             body_builder.label(label_body);
             {
-                let val = (&self).generate_operand(body, &mut body_builder);
+                let val = self.generate_operand(body, &mut body_builder);
 
                 if let Some(reg) = reg
                 {
@@ -98,7 +98,7 @@ impl<'a> GenEnv<'_, 'a>
         if let Some(else_body) = else_body
         {
             {
-                let val = (&self).generate_operand(else_body, &mut body_builder);
+                let val = self.generate_operand(else_body, &mut body_builder);
                 if let Some(reg) = reg
                 {
                     body_builder.bind(val, reg);

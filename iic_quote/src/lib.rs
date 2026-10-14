@@ -43,9 +43,10 @@ impl Parse for IicReg
             "G" | "g" => Ok(Self::G(content.parse()?)),
             _ =>
             {
-                Err((|| {
-                    syn::Error::new(ident.span(), "expected a register G(expr) or R(expr)")
-                })())
+                Err(syn::Error::new(
+                    ident.span(),
+                    "expected a register G(expr) or R(expr)",
+                ))
             }
         }
     }
