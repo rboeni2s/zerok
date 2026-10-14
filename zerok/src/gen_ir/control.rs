@@ -68,7 +68,8 @@ impl<'a> GenEnv<'_, 'a>
         let label_finished = &self.func.unique_label();
         let label_else = &self.func.unique_label();
 
-        // Vereignigt den if kopf und körper mit denen der elifs, zu einem iterator mit [(condition, body), (condition2, body2), ...]
+        // Vereignigt den if kopf und körper mit denen der elifs,
+        // zu einem iterator mit [(condition, body), (condition2, body2), ...]
         let branches =
             iter::once((condition, body)).chain(elifs.iter().map(|(cond, body)| (cond, body)));
 
@@ -81,12 +82,11 @@ impl<'a> GenEnv<'_, 'a>
 
             body_builder.label(label_body);
             {
-                let this = &self;
-                let val = this.generate_operand(body, &mut body_builder);
+                let val = (&self).generate_operand(body, &mut body_builder);
 
                 if let Some(reg) = reg
                 {
-                    ir.bind(val, reg);
+                    body_builder.bind(val, reg);
                 }
             };
 
@@ -98,11 +98,10 @@ impl<'a> GenEnv<'_, 'a>
         if let Some(else_body) = else_body
         {
             {
-                let this = &self;
-                let val = this.generate_operand(else_body, &mut body_builder);
+                let val = (&self).generate_operand(else_body, &mut body_builder);
                 if let Some(reg) = reg
                 {
-                    ir.bind(val, reg);
+                    body_builder.bind(val, reg);
                 }
             };
         }
