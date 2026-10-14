@@ -41,6 +41,9 @@ pub enum Token<'src>
     Continue,
 
     // Symbols
+    BoolAnd,
+    BoolOr,
+    BoolNot,
     Semicolon,
     Doublecolon,
     Arrow,
@@ -110,6 +113,9 @@ impl fmt::Display for Token<'_>
             Token::Break => write!(f, "{KW_BREAK}"),
             Token::Continue => write!(f, "{KW_CONTINUE}"),
             Token::Tick => write!(f, "'"),
+            Token::BoolAnd => write!(f, "&&"),
+            Token::BoolOr => write!(f, "||"),
+            Token::BoolNot => write!(f, "!"),
         }
     }
 }
@@ -203,11 +209,14 @@ pub fn lexer<'src>()
     let symbol = choice((
         // Multi character symbols have to be checked before the single character symbols they start with
         just("**").to(Token::StarStar),
+        just("&&").to(Token::BoolAnd),
+        just("||").to(Token::BoolOr),
         just("->").to(Token::Arrow),
         just("==").to(Token::EqEq),
         just("!=").to(Token::NotEq),
         just("<=").to(Token::Lte),
         just(">=").to(Token::Gte),
+        just("!").to(Token::BoolNot),
         just("<").to(Token::Lt),
         just(">").to(Token::Gt),
         just(";").to(Token::Semicolon),

@@ -178,25 +178,33 @@ where
 
                 // Parse the different operators and set their associativity and precedence
                 let operation = operand.pratt((
+                    // "a || b && c" is "a || (b && c)"
+                    infix(left(0), Binop::bool_or(), |lhs, op, rhs, info| {
+                        Self::binop(op, lhs, rhs, info.span())
+                    }),
+                    // "a == b && c < d" is "(a == b) && (c < d)"
+                    infix(left(1), Binop::bool_and(), |lhs, op, rhs, info| {
+                        Self::binop(op, lhs, rhs, info.span())
+                    }),
                     // "a + 1 < b * 2" is "(a + 1) < (b * 2)"
-                    infix(left(0), Binop::compare(), |lhs, op, rhs, info| {
+                    infix(left(2), Binop::compare(), |lhs, op, rhs, info| {
                         Self::binop(op, lhs, rhs, info.span())
                     }),
                     infix(
-                        left(1),
+                        left(3),
                         Binop::add().or(Binop::sub()),
                         |lhs, op, rhs, info| Self::binop(op, lhs, rhs, info.span()),
                     ),
                     infix(
-                        left(2),
+                        left(4),
                         choice((Binop::mul(), Binop::div(), Binop::modulo())),
                         |lhs, op, rhs, info| Self::binop(op, lhs, rhs, info.span()),
                     ),
-                    infix(right(5), Binop::pow(), |lhs, op, rhs, info| {
+                    infix(right(7), Binop::pow(), |lhs, op, rhs, info| {
                         Self::binop(op, lhs, rhs, info.span())
                     }),
                     // "-a as u32" is "(-a) as u32" and "a * b as u32" is "a * (b as u32)"
-                    postfix(3, just(Token::As).ignore_then(ident), |val, kind, info| {
+                    postfix(5, just(Token::As).ignore_then(ident), |val, kind, info| {
                         AstNode::new(
                             Self::Cast {
                                 val: Box::new(val),
@@ -205,7 +213,8 @@ where
                             info.span(),
                         )
                     }),
-                    prefix(4, Unaop::neg(), |op, val, info| {
+                    // "!a == b" is "(!a) == b" and "-a ** 2" is "-(a ** 2)"
+                    prefix(6, Unaop::neg().or(Unaop::bool_not()), |op, val, info| {
                         AstNode::new(
                             Self::Unaop {
                                 op,

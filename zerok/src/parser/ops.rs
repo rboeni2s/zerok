@@ -17,6 +17,8 @@ pub enum Binop
     Gt,
     Lte,
     Gte,
+    BoolAnd,
+    BoolOr,
 }
 
 
@@ -52,6 +54,16 @@ impl Binop
         just(Token::StarStar).to(Self::Pow)
     }
 
+    pub fn bool_and<'t, 's: 't>() -> impl P<'t, 's, Self>
+    {
+        just(Token::BoolAnd).to(Self::BoolAnd)
+    }
+
+    pub fn bool_or<'t, 's: 't>() -> impl P<'t, 's, Self>
+    {
+        just(Token::BoolOr).to(Self::BoolOr)
+    }
+
     pub fn compare<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
         choice((
@@ -79,6 +91,7 @@ impl Binop
 pub enum Unaop
 {
     Neg,
+    BoolNot,
 }
 
 
@@ -87,5 +100,10 @@ impl Unaop
     pub fn neg<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
         just(Token::Minus).to(Self::Neg)
+    }
+
+    pub fn bool_not<'t, 's: 't>() -> impl P<'t, 's, Self>
+    {
+        just(Token::BoolNot).to(Self::BoolNot)
     }
 }

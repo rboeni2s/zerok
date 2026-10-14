@@ -38,6 +38,8 @@ impl<'a> GenEnv<'_, 'a>
             Binop::Gt => IrOp::Gt,
             Binop::Lte => IrOp::Lte,
             Binop::Gte => IrOp::Gte,
+            Binop::BoolAnd => IrOp::And,
+            Binop::BoolOr => IrOp::Or,
 
             Binop::Mod | Binop::Pow if is_float(expr) =>
             {
@@ -65,6 +67,7 @@ impl<'a> GenEnv<'_, 'a>
         let op = match op
         {
             Unaop::Neg => IrOp::Sub,
+            Unaop::BoolNot => IrOp::Not,
         };
 
         ir.unaop(op, val, self.register_of(expr));

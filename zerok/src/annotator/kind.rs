@@ -118,6 +118,8 @@ pub fn binop_compat<'a>(op: &Binop, lhs: Kind, rhs: Kind, _env: &Env<'a, EnvEntr
 {
     match (op, lhs, rhs)
     {
+        (Binop::BoolAnd | Binop::BoolOr, Kind::Bool, Kind::Bool) => Some(Kind::Bool),
+
         (Binop::Add | Binop::Sub | Binop::Div | Binop::Mul | Binop::Mod | Binop::Pow, lhs, rhs)
             if lhs == rhs && lhs.is_numeric() =>
         {
@@ -144,6 +146,7 @@ pub fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) -> Opti
     match (op, arg)
     {
         (Unaop::Neg, arg) if arg.is_signed() => Some(arg),
+        (Unaop::BoolNot, Kind::Bool) => Some(Kind::Bool),
         _ => None,
     }
 }
