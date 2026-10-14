@@ -7,5 +7,6 @@ edition = "2024"
 anyhow = "1.0.104"
 ariadne = "0.6.0"
 chumsky = { version = "0.13.0", features = ["pratt"] }
+iic_quote = { version = "0.1.0", path = "../iic_quote" }
 ir = { version = "0.1.0", path = "../ir" }
 uuid = { version = "1.28.0", features = ["v4"] }

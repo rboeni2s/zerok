@@ -11,6 +11,7 @@ use crate::{
     },
     reg_util::{self, Reserved},
 };
+use iic_quote::iic_quote;
 use ir::{IrBuilder, IrOp, IrReg, ToIIC};
 
 
@@ -326,11 +327,14 @@ fn generate_expr_ir<'a>(
                 generate_expr_ir(head, env, ir, func);
             }
 
+
             ir.label(start_label)
                 .within(|ir| generate_expr_ir(body, env, ir, func))
-                .label(continue_label)
-                .jump(start_label)
-                .label(done_label);
+                .append(iic_quote! {
+                    continue_label:
+                        goto start_label;
+                    done_label:
+                });
         }
 
         Expr::Break { name: _ } =>
@@ -397,31 +401,25 @@ fn generate_pow_ir<'a>(
     func: &Function<'a, Option<Annotation>>,
 )
 {
-    let loop_label = func.unique_label();
-    let end_label = func.unique_label();
+    let loop_label = &func.unique_label();
+    let end_label = &func.unique_label();
 
     let counter = reg_util::next_register();
     let done = reg_util::next_register();
 
-    ir.bind(EnvEntry::Atom(Atom::Int(1)), reg)
-        .bind(exp, counter) // Use the counter instead of the exponent directly to avoid modifying the exponent for the rest of the program
-        .label(&loop_label)
-        .binop(
-            IrOp::Lte,
-            EnvEntry::Register(counter),
-            EnvEntry::Atom(Atom::Int(0)),
-            done,
-        )
-        .conditional_jump(EnvEntry::Register(done), &end_label)
-        .binop(IrOp::Mul, EnvEntry::Register(reg), base, reg)
-        .binop(
-            IrOp::Sub,
-            EnvEntry::Register(counter),
-            EnvEntry::Atom(Atom::Int(1)),
-            counter,
-        )
-        .jump(loop_label)
-        .label(end_label);
+    ir.append(iic_quote! {
+        R(reg) = EnvEntry::Atom(Atom::Int(1));
+        R(counter) = exp;
+
+        loop_label:
+            R(done) = EnvEntry::Register(counter) <= EnvEntry::Atom(Atom::Int(0));
+            if EnvEntry::Register(done) goto end_label;
+
+            R(reg) = EnvEntry::Register(reg) * base;
+            R(counter) = EnvEntry::Register(counter) - EnvEntry::Atom(Atom::Int(1));
+            goto loop_label;
+        end_label:
+    });
 }
 
 

@@ -4,7 +4,6 @@ pub mod gen_ir;
 pub mod parser;
 pub mod reg_util;
 
-
 use crate::{
     annotator::{Annotation, EnvEntry},
     parser::ast::AstNode,

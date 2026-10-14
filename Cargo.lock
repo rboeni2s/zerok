@@ -143,6 +143,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "iic_quote"
+version = "0.1.0"
+dependencies = [
+ "ir",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ir"
 version = "0.1.0"
 
@@ -415,6 +425,7 @@ dependencies = [
  "anyhow",
  "ariadne",
  "chumsky",
+ "iic_quote",
  "ir",
  "uuid",
 ]
