@@ -12,7 +12,42 @@ use crate::{
     reg_util::{self, Reserved},
 };
 use iic_quote::iic_quote;
-use ir::{IrBuilder, IrOp, IrReg, ToIIC};
+use ir::{IrBuilder, IrOp, IrReg, ToIIC, ToIrReg, ToIrVal};
+
+
+macro_rules! impl_to_ir_val_for_T {
+    ($($ty:ty),*) => {
+        $(
+            impl ToIrVal<EnvEntry> for $ty
+            {
+                fn to_ir_val(self) -> EnvEntry
+                {
+                    EnvEntry::Atom(Atom::Int(self as u64))
+                }
+            }
+        )*
+    };
+}
+
+impl_to_ir_val_for_T!(i32, u8, u16, u32, u64, usize);
+
+
+impl ToIrVal<EnvEntry> for bool
+{
+    fn to_ir_val(self) -> EnvEntry
+    {
+        EnvEntry::Atom(Atom::Bool(self))
+    }
+}
+
+
+impl ToIrReg<EnvEntry> for usize
+{
+    fn to_ir_reg(self) -> EnvEntry
+    {
+        EnvEntry::Register(self)
+    }
+}
 
 
 impl ToIIC for EnvEntry
@@ -408,16 +443,18 @@ fn generate_pow_ir<'a>(
     let done = reg_util::next_register();
 
     ir.append(iic_quote! {
-        R(reg) = EnvEntry::Atom(Atom::Int(1));
+        R(reg) = 1;
         R(counter) = exp;
 
         loop_label:
-            R(done) = EnvEntry::Register(counter) <= EnvEntry::Atom(Atom::Int(0));
-            if EnvEntry::Register(done) goto end_label;
 
-            R(reg) = EnvEntry::Register(reg) * base;
-            R(counter) = EnvEntry::Register(counter) - EnvEntry::Atom(Atom::Int(1));
+            R(done) = R(counter) <= 0;
+            if R(done) goto end_label;
+
+            R(reg) = R(reg) * base;
+            R(counter) = R(counter) - 1;
             goto loop_label;
+
         end_label:
     });
 }

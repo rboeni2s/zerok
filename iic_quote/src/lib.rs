@@ -1,4 +1,4 @@
-use proc_macro2::{TokenStream, TokenTree};
+use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use quote::{ToTokens, quote};
 use syn::{
     Result,
@@ -151,14 +151,32 @@ impl Parse for IicOp
 }
 
 
+/// An operand: `R(expr)` becomes a register through `ToIrReg`,
+/// any other expression becomes a value through `ToIrVal`
+enum IicVal
+{
+    Reg(syn::Expr),
+    Val(syn::Expr),
+}
+
+
+impl Parse for IicVal
+{
+    fn parse(input: ParseStream) -> Result<Self>
+    {
+        parse_val_until(input, |input| input.peek(Token![,]), "an operand")
+    }
+}
+
+
 enum IicChunk
 {
     // reg = lhs op rhs
     Bin
     {
         op: IicOp,
-        lhs: syn::Expr,
-        rhs: syn::Expr,
+        lhs: IicVal,
+        rhs: IicVal,
         reg: IicReg,
     },
 
@@ -166,14 +184,14 @@ enum IicChunk
     Una
     {
         op: IicOp,
-        arg: syn::Expr,
+        arg: IicVal,
         reg: IicReg,
     },
 
     // reg = val
     Bind
     {
-        val: syn::Expr, reg: IicReg
+        val: IicVal, reg: IicReg
     },
 
     // define name(arg1, arg2, arg3, ...):
@@ -182,18 +200,18 @@ enum IicChunk
         name: syn::Expr, args: Vec<IicReg>
     },
 
-    // reg = name(arg1, arg2, arg3, ...)
+    // reg = call name(arg1, arg2, arg3, ...)
     Call
     {
         name: syn::Expr,
-        args: Vec<syn::Expr>,
+        args: Vec<IicVal>,
         reg: IicReg,
     },
 
     // ret val
     Ret
     {
-        val: syn::Expr
+        val: IicVal
     },
 
     // name:
@@ -211,7 +229,7 @@ enum IicChunk
     // if val goto name
     CondJump
     {
-        val: syn::Expr, name: syn::Expr
+        val: IicVal, name: syn::Expr
     },
 }
 
@@ -221,6 +239,38 @@ fn parse_expr_until(
     stop: impl Fn(ParseStream) -> bool,
     what: &str,
 ) -> Result<syn::Expr>
+{
+    syn::parse2(collect_until(input, stop, what)?)
+}
+
+
+/// Like `parse_expr_until`, but recognizes a lone `R(expr)` as a register
+fn parse_val_until(
+    input: ParseStream,
+    stop: impl Fn(ParseStream) -> bool,
+    what: &str,
+) -> Result<IicVal>
+{
+    let tokens = collect_until(input, stop, what)?;
+    let mut iter = tokens.clone().into_iter();
+
+    if let (Some(TokenTree::Ident(ident)), Some(TokenTree::Group(group)), None) =
+        (iter.next(), iter.next(), iter.next())
+        && (ident == "R" || ident == "r")
+        && group.delimiter() == Delimiter::Parenthesis
+    {
+        return Ok(IicVal::Reg(syn::parse2(group.stream())?));
+    }
+
+    Ok(IicVal::Val(syn::parse2(tokens)?))
+}
+
+
+fn collect_until(
+    input: ParseStream,
+    stop: impl Fn(ParseStream) -> bool,
+    what: &str,
+) -> Result<TokenStream>
 {
     let mut tokens = TokenStream::new();
 
@@ -240,7 +290,7 @@ fn parse_expr_until(
         return Err(input.error(format!("expected {what}")));
     }
 
-    syn::parse2(tokens)
+    Ok(tokens)
 }
 
 
@@ -317,7 +367,7 @@ impl Parse for IicChunk
         {
             // ret val
             input.parse::<kw::ret>()?;
-            let val = parse_expr_until(input, at_end, "a return value")?;
+            let val = parse_val_until(input, at_end, "a return value")?;
 
             Self::Ret { val }
         }
@@ -333,7 +383,7 @@ impl Parse for IicChunk
         {
             // if val goto name
             input.parse::<Token![if]>()?;
-            let val = parse_expr_until(input, |input| input.peek(kw::goto), "a condition")?;
+            let val = parse_val_until(input, |input| input.peek(kw::goto), "a condition")?;
             input.parse::<kw::goto>()?;
             let name = parse_expr_until(input, at_end, "a label name")?;
 
@@ -372,7 +422,7 @@ fn parse_assignment(input: ParseStream) -> Result<IicChunk>
     if peek_op(input)
     {
         let op = input.parse()?;
-        let arg = parse_expr_until(input, at_end, "an operand")?;
+        let arg = parse_val_until(input, at_end, "an operand")?;
 
         return Ok(IicChunk::Una { op, arg, reg });
     }
@@ -390,7 +440,7 @@ fn parse_assignment(input: ParseStream) -> Result<IicChunk>
 
         let content;
         syn::parenthesized!(content in input);
-        let args = Punctuated::<syn::Expr, Token![,]>::parse_terminated(&content)?;
+        let args = Punctuated::<IicVal, Token![,]>::parse_terminated(&content)?;
 
         return Ok(IicChunk::Call {
             name,
@@ -399,13 +449,13 @@ fn parse_assignment(input: ParseStream) -> Result<IicChunk>
         });
     }
 
-    let lhs = parse_expr_until(input, |input| at_end(input) || peek_op(input), "a value")?;
+    let lhs = parse_val_until(input, |input| at_end(input) || peek_op(input), "a value")?;
 
     // reg = lhs op rhs
     if peek_op(input)
     {
         let op = input.parse()?;
-        let rhs = parse_expr_until(input, at_end, "an operand")?;
+        let rhs = parse_val_until(input, at_end, "an operand")?;
 
         return Ok(IicChunk::Bin { op, lhs, rhs, reg });
     }
@@ -473,6 +523,19 @@ impl ToTokens for IicOp
 }
 
 
+impl ToTokens for IicVal
+{
+    fn to_tokens(&self, tokens: &mut TokenStream)
+    {
+        tokens.extend(match self
+        {
+            IicVal::Reg(reg) => quote!(::ir::ToIrReg::to_ir_reg(#reg)),
+            IicVal::Val(val) => quote!(::ir::ToIrVal::to_ir_val(#val)),
+        });
+    }
+}
+
+
 impl ToTokens for IicChunk
 {
     fn to_tokens(&self, tokens: &mut TokenStream)
@@ -536,8 +599,8 @@ impl ToTokens for IicChunk
 /// ```ignore
 /// let chunks = iic_quote! {
 ///     define name(R(0), R(1)):
-///     R(2) = EnvEntry::Register(0) + EnvEntry::Register(1);
-///     ret EnvEntry::Register(2)
+///     R(2) = R(0) + 1u64;
+///     ret R(2)
 /// };
 /// ```
 #[proc_macro]
