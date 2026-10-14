@@ -1,6 +1,6 @@
 op main() -> u32
 {
-    wenn nee {39}
-    wenn anners nee {40}
+    wenn nee == ja {39}
+    wenn anners nee == nee {40}
     anners {41}
 }
