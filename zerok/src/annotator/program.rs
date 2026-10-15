@@ -130,15 +130,10 @@ impl<'a> Function<'a, Option<Annotation>>
         let body = self.body.annotate_expecting(&fn_env, Some(ret))?;
 
         // The value of a body that ends in a return is never used, e.g. "{ geve 1; }"
-        if body.kind != ret && !self.body.ends_with_return()
+        if !self.body.ends_with_return()
         {
-            return err!(
-                self.body.span,
-                "Function {:?} has to return {}, but its body returns {}",
-                self.name,
-                ret,
-                body.kind
-            );
+            self.body
+                .expect_kind(&fn_env, body, ret, format!("The body of {:?}", self.name))?;
         }
 
         Ok(())

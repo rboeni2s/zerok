@@ -10,6 +10,7 @@ use crate::{
     parser::{Expr, Function},
     reg_util::Reserved,
 };
+use iic_quote::iic_quote;
 use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg};
 
 
@@ -114,6 +115,18 @@ impl<'a> GenEnv<'_, 'a>
                 self.generate_expr(target, ir);
                 let source = self.generate_operand(source, ir);
                 ir.bind(source, self.register_of(expr), kind_of(expr));
+            }
+
+            // The value of a reference is the first (and only) element of its heap allocation
+            Expr::RefAssign { target, source } =>
+            {
+                self.generate_expr(target, ir);
+                let source = self.generate_operand(source, ir);
+                let (reg, kind) = (self.register_of(target), kind_of(target));
+
+                ir.append(iic_quote! {
+                    R(reg, kind)<0> = source;
+                });
             }
 
             Expr::Call { name, args } =>

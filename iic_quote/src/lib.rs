@@ -17,6 +17,7 @@ mod kw
     syn::custom_keyword!(call);
     syn::custom_keyword!(ret);
     syn::custom_keyword!(goto);
+    syn::custom_keyword!(mk);
 }
 
 
@@ -257,6 +258,28 @@ enum IicChunk
     {
         val: IicVal, name: syn::Expr
     },
+
+    // reg = <mk, size>
+    MemAlloc
+    {
+        reg: IicTypedReg, size: IicVal
+    },
+
+    // base<offset> = value
+    MemWrite
+    {
+        value: IicVal,
+        base: IicTypedReg,
+        offset: IicVal,
+    },
+
+    // reg = base<offset>
+    MemRead
+    {
+        reg: IicTypedReg,
+        base: IicVal,
+        offset: IicVal,
+    },
 }
 
 
@@ -329,6 +352,21 @@ fn at_end(input: ParseStream) -> bool
 fn peek_op(input: ParseStream) -> bool
 {
     input.fork().parse::<IicOp>().is_ok()
+}
+
+
+/// Checks for a `>` that is directly followed by `follow`, e.g. the end of `base<offset>`
+fn peek_closing_angle(input: ParseStream, follow: fn(ParseStream) -> bool) -> bool
+{
+    let fork = input.fork();
+    fork.parse::<Token![>]>().is_ok() && follow(&fork)
+}
+
+
+/// Checks for a `=` that is not a `==`
+fn peek_eq(input: ParseStream) -> bool
+{
+    input.peek(Token![=]) && !input.peek(Token![==])
 }
 
 
@@ -431,7 +469,7 @@ impl Parse for IicChunk
 }
 
 
-/// Checks for `R(..) =` or `G(..) =`, the type of the register is checked when the assignment is parsed
+/// Checks for `R(..) =`, `G(..) =` or `R(..)<`, the type of the register is checked when the assignment is parsed
 fn peek_assignment(input: ParseStream) -> bool
 {
     let fork = input.fork();
@@ -440,16 +478,49 @@ fn peek_assignment(input: ParseStream) -> bool
         .is_ok_and(|ident| ["R", "r", "G", "g"].contains(&ident.to_string().as_str()))
         && fork.peek(syn::token::Paren)
         && fork.parse::<TokenTree>().is_ok()
-        && fork.peek(Token![=])
-        && !fork.peek(Token![==])
+        && (peek_eq(&fork) || fork.peek(Token![<]))
 }
 
 
-/// Parses all chunks of the form `reg = ...`
+/// Parses all chunks of the form `reg = ...` and `reg<offset> = ...`
 fn parse_assignment(input: ParseStream) -> Result<IicChunk>
 {
     let reg: IicTypedReg = input.parse()?;
+
+    // base<offset> = value
+    if input.peek(Token![<])
+    {
+        input.parse::<Token![<]>()?;
+        let offset = parse_val_until(
+            input,
+            |input| peek_closing_angle(input, peek_eq),
+            "an offset",
+        )?;
+        input.parse::<Token![>]>()?;
+        input.parse::<Token![=]>()?;
+
+        let value = parse_val_until(input, at_end, "a value")?;
+
+        return Ok(IicChunk::MemWrite {
+            value,
+            base: reg,
+            offset,
+        });
+    }
+
     input.parse::<Token![=]>()?;
+
+    // reg = <mk, size>
+    if input.peek(Token![<]) && input.peek2(kw::mk)
+    {
+        input.parse::<Token![<]>()?;
+        input.parse::<kw::mk>()?;
+        input.parse::<Token![,]>()?;
+        let size = parse_val_until(input, |input| peek_closing_angle(input, at_end), "a size")?;
+        input.parse::<Token![>]>()?;
+
+        return Ok(IicChunk::MemAlloc { reg, size });
+    }
 
     // reg = op arg
     if peek_op(input)
@@ -484,6 +555,24 @@ fn parse_assignment(input: ParseStream) -> Result<IicChunk>
 
     let lhs = parse_val_until(input, |input| at_end(input) || peek_op(input), "a value")?;
 
+    // reg = base<offset>, it is only a read if the statement ends in a `>`, otherwise it is a `<` comparison
+    if input.peek(Token![<]) && !input.peek(Token![<=]) && peek_read_offset(input)
+    {
+        input.parse::<Token![<]>()?;
+        let offset = parse_val_until(
+            input,
+            |input| peek_closing_angle(input, at_end),
+            "an offset",
+        )?;
+        input.parse::<Token![>]>()?;
+
+        return Ok(IicChunk::MemRead {
+            reg,
+            base: lhs,
+            offset,
+        });
+    }
+
     // reg = lhs op rhs
     if peek_op(input)
     {
@@ -495,6 +584,18 @@ fn parse_assignment(input: ParseStream) -> Result<IicChunk>
 
     // reg = val
     Ok(IicChunk::Bind { val: lhs, reg })
+}
+
+
+/// Checks for `<offset>` at the end of a statement
+fn peek_read_offset(input: ParseStream) -> bool
+{
+    let fork = input.fork();
+
+    fork.parse::<Token![<]>().is_ok()
+        && collect_until(&fork, |input| peek_closing_angle(input, at_end), "").is_ok()
+        && fork.parse::<Token![>]>().is_ok()
+        && at_end(&fork)
 }
 
 
@@ -631,6 +732,22 @@ impl ToTokens for IicChunk
             {
                 let label = name(label);
                 quote!(::ir::IrChunk::CondJump { val: #val, name: #label })
+            }
+
+            IicChunk::MemAlloc { reg, size } =>
+            {
+                quote!(::ir::IrChunk::MemAlloc { reg: #reg, size: #size })
+            }
+
+            IicChunk::MemWrite {
+                value,
+                base,
+                offset,
+            } => quote!(::ir::IrChunk::MemWrite { value: #value, base: #base, offset: #offset }),
+
+            IicChunk::MemRead { reg, base, offset } =>
+            {
+                quote!(::ir::IrChunk::MemRead { reg: #reg, base: #base, offset: #offset })
             }
         });
     }

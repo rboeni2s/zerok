@@ -120,6 +120,37 @@ impl<T, K> IrBuilder<T, K>
         self
     }
 
+    pub fn alloc(&mut self, reg: usize, size: T, kind: K) -> &mut Self
+    {
+        self.chunks.push(IrChunk::MemAlloc {
+            reg: Self::reg(reg, kind),
+            size,
+        });
+        self
+    }
+
+    pub fn read(&mut self, reg: usize, kind: K, base: T, offset: T) -> &mut Self
+    {
+        self.chunks.push(IrChunk::MemRead {
+            reg: Self::reg(reg, kind),
+            base,
+            offset,
+        });
+
+        self
+    }
+
+    pub fn write(&mut self, reg: usize, kind: K, value: T, offset: T) -> &mut Self
+    {
+        self.chunks.push(IrChunk::MemWrite {
+            base: Self::reg(reg, kind),
+            value,
+            offset,
+        });
+
+        self
+    }
+
     pub fn append(&mut self, chunks: Vec<IrChunk<T, K>>) -> &mut Self
     {
         self.chunks.extend(chunks);

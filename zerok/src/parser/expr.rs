@@ -85,6 +85,13 @@ pub enum Expr<'src, D>
         source: Box<Node<'src, D>>,
     },
 
+    /// Writes `source` into the value the reference `target` points to, e.g. "a &= 5"
+    RefAssign
+    {
+        target: Box<Node<'src, D>>,
+        source: Box<Node<'src, D>>,
+    },
+
     Chain(Vec<Node<'src, D>>),
 
     // Placeholder for a something that could not be parsed.
@@ -233,22 +240,28 @@ where
                 // An assignment binds weaker than every operator, so its target can be any expression, e.g. "(f(); x) = 5".
                 // The typechecker decides whether the target is actually assignable
                 operation
-                    .then(just(Token::Eq).ignore_then(term.clone()).or_not())
-                    .map_with(|(target, source), info| {
-                        match source
+                    // "a = b" assigns to a, "a &= b" writes into the value a points to
+                    .then(
+                        choice((just(Token::Eq).to(false), just(Token::RefEq).to(true)))
+                            .then(term.clone())
+                            .or_not(),
+                    )
+                    .map_with(|(target, assignment), info| {
+                        let Some((through_ref, source)) = assignment
+                        else
                         {
-                            Some(source) =>
-                            {
-                                AstNode::new(
-                                    Self::Assign {
-                                        target: Box::new(target),
-                                        source: Box::new(source),
-                                    },
-                                    info.span(),
-                                )
-                            }
-                            None => target,
-                        }
+                            return target;
+                        };
+
+                        let (target, source) = (Box::new(target), Box::new(source));
+
+                        let expr = match through_ref
+                        {
+                            true => Self::RefAssign { target, source },
+                            false => Self::Assign { target, source },
+                        };
+
+                        AstNode::new(expr, info.span())
                     })
             }
         });

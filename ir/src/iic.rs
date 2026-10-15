@@ -108,6 +108,32 @@ where
             IrChunk::Label { name } => format!("{name}:"),
             IrChunk::Jump { name } => format!("    goto {name}"),
             IrChunk::CondJump { val, name } => format!("    if {} goto {name}", val.to_iic()),
+            IrChunk::MemAlloc { reg, size } =>
+            {
+                format!("    {} = mk[] {}", reg.to_iic(), size.to_iic())
+            }
+            IrChunk::MemWrite {
+                value,
+                base,
+                offset,
+            } =>
+            {
+                format!(
+                    "    {}[{}] = {}",
+                    base.to_iic(),
+                    offset.to_iic(),
+                    value.to_iic()
+                )
+            }
+            IrChunk::MemRead { reg, base, offset } =>
+            {
+                format!(
+                    "    {} = {}[{}]",
+                    reg.to_iic(),
+                    base.to_iic(),
+                    offset.to_iic()
+                )
+            }
         }
     }
 }

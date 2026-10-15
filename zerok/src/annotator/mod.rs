@@ -12,12 +12,12 @@ mod program;
 
 
 use crate::{
-    parser::{Expr, Node, atom::Atom},
+    parser::{Expr, Node, ast::AstNode, atom::Atom, ops::Unaop},
     reg_util::new_register,
 };
 use chumsky::span::SimpleSpan;
 use kind::{binop_compat, cast_compat, unaop_compat};
-use std::{fmt, rc::Rc};
+use std::{fmt, mem, rc::Rc};
 
 
 pub use env::{Env, EnvEntry};
@@ -167,6 +167,41 @@ impl<'a> Node<'a, Option<Annotation>>
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
         let annotation = self.annotate_expecting(env, Some(kind))?;
+        self.expect_kind(env, annotation, kind, what)
+    }
+
+    /// Like `annotate_as`, but a chain does not open its own scope, see `annotate_in_scope`
+    fn annotate_in_scope_as(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+        kind: Kind,
+        what: impl fmt::Display,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        let annotation = self.annotate_in_scope(env, Some(kind))?;
+        self.expect_kind(env, annotation, kind, what)
+    }
+
+    /// Makes sure this already annotated node has the type `kind`, `what` describes the node in the error message.
+    /// A reference is dereferenced automatically, if the value it points to has the type `kind`,
+    /// e.g. a "&&u32" is dereferenced twice for a "u32" and once for a "&u32"
+    fn expect_kind(
+        &mut self,
+        env: &Rc<Env<'a, EnvEntry>>,
+        mut annotation: Annotation,
+        kind: Kind,
+        what: impl fmt::Display,
+    ) -> Result<Annotation, (SimpleSpan, String)>
+    {
+        // Only dereference if this leads to `kind`, so the error message shows the original type otherwise
+        if annotation.kind.dereferences_to(kind)
+        {
+            while let Kind::Ref(&inner) = annotation.kind
+                && annotation.kind != kind
+            {
+                annotation = self.deref_once(env, inner);
+            }
+        }
 
         if annotation.kind != kind
         {
@@ -182,28 +217,29 @@ impl<'a> Node<'a, Option<Annotation>>
         Ok(annotation)
     }
 
-    /// Like `annotate_as`, but a chain does not open its own scope, see `annotate_in_scope`
-    fn annotate_in_scope_as(
-        &mut self,
-        env: &Rc<Env<'a, EnvEntry>>,
-        kind: Kind,
-        what: impl fmt::Display,
-    ) -> Result<Annotation, (SimpleSpan, String)>
+    /// Wraps this node, which is a reference to `inner`, into a dereference of it and returns the annotation of the dereference.
+    /// The dereference gets its own register for the read value
+    fn deref_once(&mut self, env: &Rc<Env<'a, EnvEntry>>, inner: Kind) -> Annotation
     {
-        let annotation = self.annotate_in_scope(env, Some(kind))?;
+        let span = self.span;
+        let val = mem::replace(self, AstNode::new(Expr::ParseError, span));
 
-        if annotation.kind != kind
-        {
-            return err!(
-                self.span,
-                "{} has to be of type {}, but is of type {}",
-                what,
-                kind,
-                annotation.kind
-            );
-        }
+        let annotation = Annotation {
+            kind: inner,
+            cell: new_register(env),
+            effect: Effect::None,
+        };
 
-        Ok(annotation)
+        *self = AstNode::new(
+            Expr::Unaop {
+                op: Unaop::Deref,
+                val: Box::new(val),
+            },
+            span,
+        );
+        self.data = Some(annotation.clone());
+
+        annotation
     }
 
     pub fn annotate(
@@ -294,6 +330,14 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Unaop { op, val } =>
             {
+                // The value of a reference is expected to be of the type the reference points to, e.g. "&1" as a "&u32" is "&(1 as u32)".
+                // If something else than a reference is expected, it is passed on, so that the reference can be dereferenced to it
+                let expected = match (&*op, expected)
+                {
+                    (Unaop::Ref, Some(Kind::Ref(inner))) => Some(*inner),
+                    _ => expected,
+                };
+
                 let val = val.annotate_expecting(&env.child_env(), expected)?.kind;
 
                 match unaop_compat(op, val, env)
@@ -360,11 +404,20 @@ impl<'a> Node<'a, Option<Annotation>>
                     return err!(span, "Cannot cast to none");
                 }
 
-                let val = val.annotate_expecting(&env.child_env(), Some(kind))?.kind;
+                let original = val.annotate_expecting(&env.child_env(), Some(kind))?.kind;
 
-                if !cast_compat(val, kind)
+                // A cast also dereferences, until the value has the target type or is no reference anymore,
+                // e.g. "a as u32" and "a as u64" read the u32 a "&u32" points to
+                let mut from = original;
+                while let Kind::Ref(&inner) = from
+                    && from != kind
                 {
-                    return err!(span, "Cannot cast a value of type {} to {}", val, kind);
+                    from = val.deref_once(env, inner).kind;
+                }
+
+                if !cast_compat(from, kind)
+                {
+                    return err!(span, "Cannot cast a value of type {} to {}", original, kind);
                 }
 
                 Ok(Annotation {
@@ -586,6 +639,28 @@ impl<'a> Node<'a, Option<Annotation>>
                     true => err!(span, "Value is not assignable"),
                     false => Ok(target),
                 }
+            }
+
+            // The target does not have to be assignable, because the value it points to is written and not the target itself.
+            // A "&&u32" is only dereferenced once, so a "&u32" is written into it
+            Expr::RefAssign { target, source } =>
+            {
+                let target = target.annotate(env)?;
+
+                let Kind::Ref(&inner) = target.kind
+                else
+                {
+                    return err!(
+                        span,
+                        "Can only write through a reference, but the target is of type {}",
+                        target.kind
+                    );
+                };
+
+                source.annotate_as(env, inner, "The written value")?;
+
+                // Like an assignment, this evaluates to its target
+                Ok(target)
             }
 
             Expr::ParseError =>

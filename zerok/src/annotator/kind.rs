@@ -51,6 +51,15 @@ impl Kind
         )
     }
 
+    pub fn dereferenced(self) -> Self
+    {
+        match self
+        {
+            Self::Ref(inner) => *inner,
+            _ => panic!("Types that arent referenced cannot be dereferenced"),
+        }
+    }
+
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(value: &str) -> Option<Self>
     {
@@ -80,6 +89,17 @@ impl Kind
         {
             Type::Name(name) => Self::from_str(name),
             Type::Ref(inner) => Self::from_type(inner).map(Self::referenced),
+        }
+    }
+
+    /// Checks if `self` is `kind` or a (multiple times) reference to it, e.g. "&&u32" dereferences to "&u32" and "u32"
+    pub fn dereferences_to(self, kind: Kind) -> bool
+    {
+        match self
+        {
+            _ if self == kind => true,
+            Kind::Ref(inner) => inner.dereferences_to(kind),
+            _ => false,
         }
     }
 
@@ -189,6 +209,9 @@ pub fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) -> Opti
     {
         (Unaop::Neg, arg) if arg.is_signed() => Some(arg),
         (Unaop::BoolNot, Kind::Bool) => Some(Kind::Bool),
+
+        // Values of type none do not exist, so there is nothing to put on the heap
+        (Unaop::Ref, arg) if arg != Kind::None => Some(arg.referenced()),
         _ => None,
     }
 }

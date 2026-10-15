@@ -95,6 +95,10 @@ pub enum Unaop
 
     /// Copies the value onto the heap and returns a reference to it, e.g. "&a"
     Ref,
+
+    /// Reads the value a reference points to. There is no syntax for it, the typechecker inserts it to
+    /// automatically dereference a reference where its value is expected
+    Deref,
 }
 
 

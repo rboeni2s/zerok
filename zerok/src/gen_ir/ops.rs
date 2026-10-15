@@ -2,7 +2,10 @@ use super::{GenEnv, kind_of};
 use crate::{
     ExprAst,
     annotator::{EnvEntry, Kind},
-    parser::ops::{Binop, Unaop},
+    parser::{
+        atom::Atom,
+        ops::{Binop, Unaop},
+    },
     reg_util,
 };
 use iic_quote::iic_quote;
@@ -71,7 +74,29 @@ impl<'a> GenEnv<'_, 'a>
         {
             Unaop::Neg => IrOp::Sub,
             Unaop::BoolNot => IrOp::Not,
-            Unaop::Ref => todo!("References are not implemented in the ir yet"),
+
+            Unaop::Ref =>
+            {
+                let reg = self.register_of(expr);
+
+                ir.append(iic_quote! {
+                    R(reg, kind_of(expr)) = <mk, 1>;
+                    R(reg, kind_of(expr))<0> = val;
+                });
+
+                return;
+            }
+
+            Unaop::Deref =>
+            {
+                let reg = self.register_of(expr);
+
+                ir.append(iic_quote! {
+                   R(reg, kind_of(expr)) = val<0>;
+                });
+
+                return;
+            }
         };
 
         ir.unaop(op, val, self.register_of(expr), kind_of(expr));

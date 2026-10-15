@@ -1,3 +1,6 @@
+mod common;
+
+use common::*;
 use std::rc::Rc;
 use zerok::annotator::{Annotation, Env, Kind};
 use zerok::parser;
@@ -284,4 +287,194 @@ fn ifs()
         )
         .is_ok()
     );
+}
+
+
+/// Parses and annotates the program `input` and returns the annotated body of its first function
+fn annotated_body(input: &str) -> Result<Node<'_, Option<Annotation>>, String>
+{
+    let mut program = parser::parse_prog::<Option<Annotation>>(input, "").expect("Parsing failed");
+
+    program
+        .annotate(&Rc::new(Env::default()))
+        .map_err(|(_, msg)| msg)?;
+
+    Ok(program.functions.remove(0).body)
+}
+
+
+fn deref<'a>(val: Node<'a, Option<Annotation>>) -> Node<'a, Option<Annotation>>
+{
+    unaop(Unaop::Deref, val)
+}
+
+
+#[test]
+fn auto_deref()
+{
+    let main = "op main() {}";
+
+    // A reference is dereferenced where the value it points to is expected
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) {{ sett x: u32 = a; }} {main}")),
+        Ok(chain![decl("x", "u32", deref(binding("a"))), nop()])
+    );
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) -> u32 {{ a }} {main}")),
+        Ok(deref(chain![binding("a")]))
+    );
+    assert_eq!(
+        annotated_body(&format!(
+            "op f(a: &u32) {{ g(a); }} op g(b: u32) {{}} {main}"
+        )),
+        Ok(chain![call("g", vec![deref(binding("a"))]), nop()])
+    );
+    assert_eq!(
+        annotated_body(&format!("op f(a: &bool) {{ wenn a {{}}; }} {main}")),
+        Ok(chain![
+            if_(deref(chain![binding("a")]), chain![], vec![], None),
+            nop()
+        ])
+    );
+
+    // References to references are dereferenced as often as needed
+    assert_eq!(
+        annotated_body(&format!(
+            "op f(a: &&u32) {{ sett x: u32 = a; sett y: &u32 = a; }} {main}"
+        )),
+        Ok(chain![
+            decl("x", "u32", deref(deref(binding("a")))),
+            decl("y", ref_type("u32"), deref(binding("a"))),
+            nop()
+        ])
+    );
+
+    // A reference is not dereferenced if the reference itself is expected
+    assert_eq!(
+        annotated_body(&format!(
+            "op f(a: &u32) -> &u32 {{ sett x: &u32 = a; x }} {main}"
+        )),
+        Ok(chain![
+            decl("x", ref_type("u32"), binding("a")),
+            binding("x")
+        ])
+    );
+
+    // Only references are dereferenced, and only to the type they point to
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) {{ sett x: i32 = a; }} {main}")),
+        Err("The value of \"x\" has to be of type i32, but is of type &u32".into())
+    );
+    assert!(annotated_body(&format!("op f(a: u32) {{ sett x: &u32 = a; }} {main}")).is_err());
+    assert!(annotated_body(&format!("op f(a: &u32) -> i32 {{ a }} {main}")).is_err());
+
+    // Operators do not dereference their operands
+    assert!(annotated_body(&format!("op f(a: &u32) -> u32 {{ a + 1 }} {main}")).is_err());
+}
+
+
+#[test]
+fn references()
+{
+    assert_eq!(kind_of("&1"), Ok(Kind::Ref(&Kind::I32)));
+    assert_eq!(kind_of("&&ja"), Ok(Kind::Ref(&Kind::Ref(&Kind::Bool))));
+    assert_eq!(kind_of("sett a: u64 = 1; &a"), Ok(Kind::Ref(&Kind::U64)));
+    assert_eq!(kind_of("&(1 + 2)"), Ok(Kind::Ref(&Kind::I32)));
+
+    // Literals take the type the expected reference points to
+    assert_eq!(
+        kind_of("sett a: &u64 = &4000000000; a"),
+        Ok(Kind::Ref(&Kind::U64))
+    );
+    assert_eq!(
+        kind_of("sett a: &&f64 = &&1f; a"),
+        Ok(Kind::Ref(&Kind::Ref(&Kind::F64)))
+    );
+    assert!(kind_of("sett a: &u32 = &4294967296").is_err());
+
+    // A reference is dereferenced automatically, so a new reference can be used as a value right away
+    assert_eq!(kind_of("sett a: u64 = &1; a"), Ok(Kind::U64));
+
+    // The referenced value has to have the right type
+    assert!(kind_of("sett a: u32 = 1; sett b: &u64 = &a").is_err());
+    assert!(kind_of("sett a: &u32 = &ja").is_err());
+
+    // There are no references to none
+    assert!(kind_of("&keenop").is_err());
+    assert!(kind_of("&(1;)").is_err());
+}
+
+
+#[test]
+fn writing_through_references()
+{
+    // A write evaluates to its target, like an assignment
+    assert_eq!(
+        kind_of("sett a: &u32 = &1; a &= 5"),
+        Ok(Kind::Ref(&Kind::U32))
+    );
+    assert_eq!(
+        kind_of("sett a: &u32 = &1; sett b: u32 = 2; a &= b + 1; a"),
+        Ok(Kind::Ref(&Kind::U32))
+    );
+
+    // The written value has to be of the type the reference points to
+    assert!(kind_of("sett a: &u32 = &1; a &= ja").is_err());
+    assert!(kind_of("sett a: &u32 = &1; a &= 4294967296").is_err());
+
+    // A reference to a reference is only dereferenced once, so a reference is written into it
+    assert!(kind_of("sett a: &&u32 = &&1; a &= &5").is_ok());
+    assert!(kind_of("sett a: &&u32 = &&1; a &= 5").is_err());
+
+    // Only references can be written through, but they do not have to be assignable
+    assert!(kind_of("sett a: u32 = 1; a &= 2").is_err());
+    assert!(kind_of("&1 &= 2").is_ok());
+}
+
+
+#[test]
+fn casts_dereference()
+{
+    let main = "op main() {}";
+
+    // A cast dereferences until the value has the target type
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) {{ a as u32; }} {main}")),
+        Ok(chain![cast(deref(binding("a")), "u32"), nop()])
+    );
+    assert_eq!(
+        annotated_body(&format!("op f(a: &&u32) {{ a as &u32; a as u32; }} {main}")),
+        Ok(chain![
+            cast(deref(binding("a")), ref_type("u32")),
+            cast(deref(deref(binding("a"))), "u32"),
+            nop()
+        ])
+    );
+
+    // ... or is no reference anymore, then it is a normal cast
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) {{ a as f64; }} {main}")),
+        Ok(chain![cast(deref(binding("a")), "f64"), nop()])
+    );
+
+    // A reference is not dereferenced if it already has the target type
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) {{ a as &u32; }} {main}")),
+        Ok(chain![cast(binding("a"), ref_type("u32")), nop()])
+    );
+
+    // References can not be cast to other references, the error shows the original type
+    assert_eq!(
+        annotated_body(&format!("op f(a: &u32) {{ a as &u64; }} {main}")),
+        Err("Cannot cast a value of type &u32 to &u64".into())
+    );
+    assert!(annotated_body(&format!("op f(a: &u32) {{ a as bool; }} {main}")).is_err());
+    assert!(annotated_body(&format!("op f(a: u32) {{ a as &u32; }} {main}")).is_err());
+
+    // Values can be read from a reference inside of expressions
+    assert_eq!(
+        kind_of("sett a: &u32 = &1; a &= 1 + a as u32; a as u32"),
+        Ok(Kind::U32)
+    );
+    assert!(kind_of("sett a: &u32 = &1; a &= 1 + a").is_err());
 }

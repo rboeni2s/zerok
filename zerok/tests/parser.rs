@@ -435,6 +435,29 @@ fn references()
         }
     );
 
+    // Writing into the value a reference points to
+    assert_eq!(
+        parse("a &= 1 + 2").unwrap(),
+        chain![ref_assign(binding("a"), add(num(1), num(2)))]
+    );
+    assert_eq!(
+        parse("a &= b &= c").unwrap(),
+        chain![ref_assign(
+            binding("a"),
+            ref_assign(binding("b"), binding("c"))
+        )]
+    );
+    assert_eq!(
+        parse("&a &= &b").unwrap(),
+        chain![ref_assign(reference(binding("a")), reference(binding("b")))]
+    );
+    assert_eq!(
+        parse("a=&b").unwrap(),
+        chain![assign(binding("a"), reference(binding("b")))]
+    );
+    assert!(parse("a &=").is_err());
+    assert!(parse("a & = 1").is_err());
+
     // A reference needs something to refer to
     assert!(parse("&").is_err());
     assert!(parse("sett x: & = a").is_err());

@@ -120,4 +120,23 @@ pub enum IrChunk<T, K>
     {
         val: T, name: String
     },
+
+    MemAlloc
+    {
+        reg: IrTypedReg<K>, size: T
+    },
+
+    MemWrite
+    {
+        value: T,
+        base: IrTypedReg<K>,
+        offset: T,
+    },
+
+    MemRead
+    {
+        reg: IrTypedReg<K>,
+        base: T,
+        offset: T,
+    },
 }

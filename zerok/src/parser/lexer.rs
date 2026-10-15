@@ -45,6 +45,7 @@ pub enum Token<'src>
     BoolOr,
     BoolNot,
     Ref,
+    RefEq,
     Semicolon,
     Doublecolon,
     Arrow,
@@ -118,6 +119,7 @@ impl fmt::Display for Token<'_>
             Token::BoolOr => write!(f, "||"),
             Token::BoolNot => write!(f, "!"),
             Token::Ref => write!(f, "&"),
+            Token::RefEq => write!(f, "&="),
         }
     }
 }
@@ -208,16 +210,21 @@ pub fn lexer<'src>()
         }
     });
 
-    let symbol = choice((
-        // Multi character symbols have to be checked before the single character symbols they start with
+    // Multi character symbols have to be checked before the single character symbols they start with
+    let multi_char_symbol = choice((
         just("**").to(Token::StarStar),
         just("&&").to(Token::BoolAnd),
+        just("&=").to(Token::RefEq),
         just("||").to(Token::BoolOr),
         just("->").to(Token::Arrow),
         just("==").to(Token::EqEq),
         just("!=").to(Token::NotEq),
         just("<=").to(Token::Lte),
         just(">=").to(Token::Gte),
+    ));
+
+    let symbol = choice((
+        multi_char_symbol,
         just("!").to(Token::BoolNot),
         just("&").to(Token::Ref),
         just("<").to(Token::Lt),

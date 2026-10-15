@@ -1,7 +1,7 @@
 //! Helpers to build expected asts in tests
 
 // Not every test file uses every helper
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
 pub use zerok::parser::atom::Atom;
 pub use zerok::parser::ops::{Binop, Unaop};
@@ -203,6 +203,26 @@ pub fn neg<'a, D: Default>(val: Node<'a, D>) -> Node<'a, D>
 pub fn reference<'a, D: Default>(val: Node<'a, D>) -> Node<'a, D>
 {
     unaop(Unaop::Ref, val)
+}
+
+
+pub fn assign<'a, D: Default>(target: Node<'a, D>, source: Node<'a, D>) -> Node<'a, D>
+{
+    Expr::Assign {
+        target: Box::new(target),
+        source: Box::new(source),
+    }
+    .into()
+}
+
+
+pub fn ref_assign<'a, D: Default>(target: Node<'a, D>, source: Node<'a, D>) -> Node<'a, D>
+{
+    Expr::RefAssign {
+        target: Box::new(target),
+        source: Box::new(source),
+    }
+    .into()
 }
 
 
