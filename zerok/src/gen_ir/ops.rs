@@ -71,6 +71,7 @@ impl<'a> GenEnv<'_, 'a>
         {
             Unaop::Neg => IrOp::Sub,
             Unaop::BoolNot => IrOp::Not,
+            Unaop::Ref => todo!("References are not implemented in the ir yet"),
         };
 
         ir.unaop(op, val, self.register_of(expr), kind_of(expr));

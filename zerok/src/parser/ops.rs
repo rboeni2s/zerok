@@ -92,6 +92,9 @@ pub enum Unaop
 {
     Neg,
     BoolNot,
+
+    /// Copies the value onto the heap and returns a reference to it, e.g. "&a"
+    Ref,
 }
 
 
@@ -105,5 +108,10 @@ impl Unaop
     pub fn bool_not<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
         just(Token::BoolNot).to(Self::BoolNot)
+    }
+
+    pub fn reference<'t, 's: 't>() -> impl P<'t, 's, Self>
+    {
+        just(Token::Ref).to(Self::Ref)
     }
 }

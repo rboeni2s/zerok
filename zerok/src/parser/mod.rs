@@ -4,6 +4,7 @@ pub mod expr;
 pub mod lexer;
 pub mod ops;
 pub mod program;
+pub mod types;
 
 
 use anyhow::Context;
@@ -13,6 +14,7 @@ use chumsky::prelude::*;
 pub use expr::Expr;
 pub use lexer::{Spanned, Token};
 pub use program::{Function, Param, Program};
+pub use types::Type;
 
 
 /// TokenInput

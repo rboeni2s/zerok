@@ -5,7 +5,7 @@
 
 pub use zerok::parser::atom::Atom;
 pub use zerok::parser::ops::{Binop, Unaop};
-pub use zerok::parser::{Expr, Function, Node, Param, Program};
+pub use zerok::parser::{Expr, Function, Node, Param, Program, Type};
 
 
 macro_rules! chain {
@@ -46,11 +46,15 @@ pub fn atom_str<'a, D: Default>(s: impl Into<String>) -> Node<'a, D>
 }
 
 
-pub fn decl<'a, D: Default>(name: &'a str, kind: &'a str, expr: Node<'a, D>) -> Node<'a, D>
+pub fn decl<'a, D: Default>(
+    name: &'a str,
+    kind: impl Into<Type<'a>>,
+    expr: Node<'a, D>,
+) -> Node<'a, D>
 {
     Expr::Decl {
         name,
-        kind,
+        kind: kind.into(),
         val: Box::new(expr),
     }
     .into()
@@ -72,8 +76,8 @@ pub fn call<'a, D: Default>(name: &'a str, args: Vec<Node<'a, D>>) -> Node<'a, D
 /// Builds a function, `params` are pairs of names and types
 pub fn function<'a, D: Default>(
     name: &'a str,
-    params: &[(&'a str, &'a str)],
-    ret: Option<&'a str>,
+    params: &[(&'a str, Type<'a>)],
+    ret: Option<Type<'a>>,
     body: Node<'a, D>,
 ) -> Function<'a, D>
 {
@@ -81,10 +85,10 @@ pub fn function<'a, D: Default>(
         name,
         params: params
             .iter()
-            .map(|&(name, kind)| {
+            .map(|(name, kind)| {
                 Param {
                     name,
-                    kind,
+                    kind: kind.clone(),
                     span: Default::default(),
                     data: Default::default(),
                 }
@@ -123,11 +127,11 @@ pub fn ret<'a, D: Default>(val: Option<Node<'a, D>>) -> Node<'a, D>
 }
 
 
-pub fn cast<'a, D: Default>(val: Node<'a, D>, kind: &'a str) -> Node<'a, D>
+pub fn cast<'a, D: Default>(val: Node<'a, D>, kind: impl Into<Type<'a>>) -> Node<'a, D>
 {
     Expr::Cast {
         val: Box::new(val),
-        kind,
+        kind: kind.into(),
     }
     .into()
 }
@@ -193,4 +197,17 @@ pub fn pow<'a, D: Default>(lhs: Node<'a, D>, rhs: Node<'a, D>) -> Node<'a, D>
 pub fn neg<'a, D: Default>(val: Node<'a, D>) -> Node<'a, D>
 {
     unaop(Unaop::Neg, val)
+}
+
+
+pub fn reference<'a, D: Default>(val: Node<'a, D>) -> Node<'a, D>
+{
+    unaop(Unaop::Ref, val)
+}
+
+
+/// The type "&kind"
+pub fn ref_type<'a>(kind: impl Into<Type<'a>>) -> Type<'a>
+{
+    Type::Ref(Box::new(kind.into()))
 }

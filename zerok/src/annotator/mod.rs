@@ -313,10 +313,10 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Decl { name, kind, val } =>
             {
-                let Some(kind) = Kind::from_str(kind)
+                let Some(kind) = Kind::from_type(kind)
                 else
                 {
-                    return err!(span, "Unknown type {:?}", kind);
+                    return err!(span, "Unknown type \"{}\"", kind);
                 };
 
                 val.annotate_as(&env.child_env(), kind, format!("The value of {name:?}"))?;
@@ -349,10 +349,10 @@ impl<'a> Node<'a, Option<Annotation>>
 
             Expr::Cast { val, kind } =>
             {
-                let Some(kind) = Kind::from_str(kind)
+                let Some(kind) = Kind::from_type(kind)
                 else
                 {
-                    return err!(span, "Unknown type {:?}", kind);
+                    return err!(span, "Unknown type \"{}\"", kind);
                 };
 
                 if kind == Kind::None

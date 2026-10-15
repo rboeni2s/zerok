@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{Expr, Node, P, Token};
+use super::{Expr, Node, P, Token, Type};
 use chumsky::prelude::*;
 
 
@@ -9,7 +9,7 @@ use chumsky::prelude::*;
 pub struct Param<'src, D>
 {
     pub name: &'src str,
-    pub kind: &'src str,
+    pub kind: Type<'src>,
     pub span: SimpleSpan,
     pub data: D,
 }
@@ -25,7 +25,7 @@ pub struct Function<'src, D>
     pub params: Vec<Param<'src, D>>,
 
     /// The return type, `None` if the function does not return anything
-    pub ret: Option<&'src str>,
+    pub ret: Option<Type<'src>>,
 
     pub body: Node<'src, D>,
     pub span: SimpleSpan,
@@ -94,7 +94,7 @@ where
 
         let param = ident
             .then_ignore(just(Token::Doublecolon))
-            .then(ident)
+            .then(Type::parser())
             .map_with(|(name, kind), info| {
                 Param {
                     name,
@@ -110,7 +110,7 @@ where
             .collect::<Vec<_>>()
             .delimited_by(just(Token::LParen), just(Token::RParen));
 
-        let ret = just(Token::Arrow).ignore_then(ident).or_not();
+        let ret = just(Token::Arrow).ignore_then(Type::parser()).or_not();
 
         let body = Expr::parser().delimited_by(just(Token::LBrace), just(Token::RBrace));
 

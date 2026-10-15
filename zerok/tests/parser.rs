@@ -189,8 +189,8 @@ fn functions()
         Program {
             functions: vec![function(
                 "add",
-                &[("a", "i32"), ("b", "i32")],
-                Some("i32"),
+                &[("a", "i32".into()), ("b", "i32".into())],
+                Some("i32".into()),
                 chain![add(binding("a"), binding("b"))]
             )]
         }
@@ -367,4 +367,77 @@ fn ifs()
     assert!(parse("wenn anners a { 1 }").is_err());
     assert!(parse("wenn a { 1 } anners { 2 } anners { 3 }").is_err());
     assert!(parse("wenn a { 1 } anners { 2 } wenn anners b { 3 }").is_err());
+}
+
+
+#[test]
+fn references()
+{
+    // A reference in front of a value
+    assert_eq!(parse("&a").unwrap(), chain![reference(binding("a"))]);
+    assert_eq!(parse("&1").unwrap(), chain![reference(num(1))]);
+    assert_eq!(
+        parse("&(a + 1)").unwrap(),
+        chain![reference(chain![add(binding("a"), num(1))])]
+    );
+
+    // "&" binds like "-", so stronger than binary operators and "as"
+    assert_eq!(
+        parse("&a + b").unwrap(),
+        chain![add(reference(binding("a")), binding("b"))]
+    );
+    assert_eq!(
+        parse("&a as &u32").unwrap(),
+        chain![cast(reference(binding("a")), ref_type("u32"))]
+    );
+
+    // "&&" is lexed as one token, but is still two references in front of a value
+    assert_eq!(
+        parse("&&a").unwrap(),
+        chain![reference(reference(binding("a")))]
+    );
+    assert_eq!(
+        parse("& &a").unwrap(),
+        chain![reference(reference(binding("a")))]
+    );
+    assert_eq!(
+        parse("a && &b").unwrap(),
+        chain![binop(Binop::BoolAnd, binding("a"), reference(binding("b")))]
+    );
+
+    // A reference in front of a type
+    assert_eq!(
+        parse("sett x: &u32 = &1").unwrap(),
+        chain![decl("x", ref_type("u32"), reference(num(1)))]
+    );
+    assert_eq!(
+        parse("sett x: &&u32 = &&1").unwrap(),
+        chain![decl(
+            "x",
+            ref_type(ref_type("u32")),
+            reference(reference(num(1)))
+        )]
+    );
+    assert_eq!(
+        parse("sett x: & & u32 = a").unwrap(),
+        chain![decl("x", ref_type(ref_type("u32")), binding("a"))]
+    );
+
+    assert_eq!(
+        parse_program("op deref(a: &u32, b: u32) -> &u32 { a }").unwrap(),
+        Program {
+            functions: vec![function(
+                "deref",
+                &[("a", ref_type("u32")), ("b", "u32".into())],
+                Some(ref_type("u32")),
+                chain![binding("a")]
+            )]
+        }
+    );
+
+    // A reference needs something to refer to
+    assert!(parse("&").is_err());
+    assert!(parse("sett x: & = a").is_err());
+    assert!(parse("sett x: u32& = a").is_err());
+    assert!(parse("a as &").is_err());
 }

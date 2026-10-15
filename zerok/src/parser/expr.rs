@@ -2,7 +2,7 @@ use crate::parser::ast::AstNode;
 
 use super::atom::Atom;
 use super::ops::{Binop, Unaop};
-use super::{Node, P, Token};
+use super::{Node, P, Token, Type};
 use chumsky::pratt::*;
 use chumsky::prelude::*;
 
@@ -28,7 +28,7 @@ pub enum Expr<'src, D>
     Decl
     {
         name: &'src str,
-        kind: &'src str,
+        kind: Type<'src>,
         val: Box<Node<'src, D>>,
     },
 
@@ -46,7 +46,7 @@ pub enum Expr<'src, D>
     Cast
     {
         val: Box<Node<'src, D>>,
-        kind: &'src str,
+        kind: Type<'src>,
     },
 
     Return
@@ -118,7 +118,7 @@ where
                 let decl = just(Token::Decl)
                     .ignore_then(ident)
                     .then_ignore(just(Token::Doublecolon))
-                    .then(ident)
+                    .then(Type::parser())
                     .then_ignore(just(Token::Eq))
                     .then(term.clone())
                     .map(|((name, kind), val)| {
@@ -204,24 +204,29 @@ where
                         Self::binop(op, lhs, rhs, info.span())
                     }),
                     // "-a as u32" is "(-a) as u32" and "a * b as u32" is "a * (b as u32)"
-                    postfix(5, just(Token::As).ignore_then(ident), |val, kind, info| {
-                        AstNode::new(
-                            Self::Cast {
-                                val: Box::new(val),
-                                kind,
-                            },
-                            info.span(),
-                        )
-                    }),
-                    // "!a == b" is "(!a) == b" and "-a ** 2" is "-(a ** 2)"
-                    prefix(6, Unaop::neg().or(Unaop::bool_not()), |op, val, info| {
-                        AstNode::new(
-                            Self::Unaop {
-                                op,
-                                val: Box::new(val),
-                            },
-                            info.span(),
-                        )
+                    postfix(
+                        5,
+                        just(Token::As).ignore_then(Type::parser()),
+                        |val, kind, info| {
+                            AstNode::new(
+                                Self::Cast {
+                                    val: Box::new(val),
+                                    kind,
+                                },
+                                info.span(),
+                            )
+                        },
+                    ),
+                    // "!a == b" is "(!a) == b", "-a ** 2" is "-(a ** 2)" and "&a + b" is "(&a) + b"
+                    prefix(
+                        6,
+                        choice((Unaop::neg(), Unaop::bool_not(), Unaop::reference())),
+                        |op, val, info| Self::unaop(op, val, info.span()),
+                    ),
+                    // "&&" is lexed as one token, so "&&a" is a reference to a reference
+                    prefix(6, just(Token::BoolAnd), |_, val, info| {
+                        let inner = Self::unaop(Unaop::Ref, val, info.span());
+                        Self::unaop(Unaop::Ref, inner, info.span())
                     }),
                 ));
 
@@ -397,6 +402,18 @@ where
         just(Token::Continue)
             .ignore_then(name.or_not())
             .map_with(|name, info| AstNode::new(Expr::Continue { name }, info.span()))
+    }
+
+
+    fn unaop(op: Unaop, val: Node<'src, D>, span: SimpleSpan) -> Node<'src, D>
+    {
+        AstNode::new(
+            Self::Unaop {
+                op,
+                val: Box::new(val),
+            },
+            span,
+        )
     }
 
 

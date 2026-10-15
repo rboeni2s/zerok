@@ -44,6 +44,7 @@ pub enum Token<'src>
     BoolAnd,
     BoolOr,
     BoolNot,
+    Ref,
     Semicolon,
     Doublecolon,
     Arrow,
@@ -116,6 +117,7 @@ impl fmt::Display for Token<'_>
             Token::BoolAnd => write!(f, "&&"),
             Token::BoolOr => write!(f, "||"),
             Token::BoolNot => write!(f, "!"),
+            Token::Ref => write!(f, "&"),
         }
     }
 }
@@ -217,6 +219,7 @@ pub fn lexer<'src>()
         just("<=").to(Token::Lte),
         just(">=").to(Token::Gte),
         just("!").to(Token::BoolNot),
+        just("&").to(Token::Ref),
         just("<").to(Token::Lt),
         just(">").to(Token::Gt),
         just(";").to(Token::Semicolon),

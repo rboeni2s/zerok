@@ -64,11 +64,12 @@ impl<'a> Function<'a, Option<Annotation>>
     fn signature(&self) -> Result<(Kind, Vec<Kind>), (SimpleSpan, String)>
     {
         // A function without a return type does not return anything
-        let ret = match self.ret
+        let ret = match &self.ret
         {
             Some(ret) =>
             {
-                Kind::from_str(ret).ok_or_else(|| (self.span, format!("Unknown type {ret:?}")))?
+                Kind::from_type(ret)
+                    .ok_or_else(|| (self.span, format!("Unknown type \"{ret}\"")))?
             }
             None => Kind::None,
         };
@@ -77,14 +78,14 @@ impl<'a> Function<'a, Option<Annotation>>
             .params
             .iter()
             .map(|param| {
-                match Kind::from_str(param.kind)
+                match Kind::from_type(&param.kind)
                 {
                     Some(Kind::None) =>
                     {
                         Err((param.span, "Parameters can not be of type none".into()))
                     }
                     Some(kind) => Ok(kind),
-                    None => Err((param.span, format!("Unknown type {:?}", param.kind))),
+                    None => Err((param.span, format!("Unknown type \"{}\"", param.kind))),
                 }
             })
             .collect::<Result<_, _>>()?;

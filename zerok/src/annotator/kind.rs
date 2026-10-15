@@ -1,5 +1,6 @@
 use super::env::{Env, EnvEntry};
 use crate::parser::{
+    Type,
     atom::Atom,
     ops::{Binop, Unaop},
 };
@@ -39,6 +40,17 @@ impl Kind
             "none" => Some(Kind::None),
             "bool" => Some(Kind::Bool),
             _ => None,
+        }
+    }
+
+    /// The type of a type written in the source
+    //TODO: References are not supported by the typechecker yet
+    pub fn from_type(ty: &Type<'_>) -> Option<Self>
+    {
+        match ty
+        {
+            Type::Name(name) => Self::from_str(name),
+            Type::Ref(_) => None,
         }
     }
 
