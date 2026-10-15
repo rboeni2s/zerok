@@ -7,15 +7,15 @@ use crate::{
     ExprAst,
     ProgAst,
     annotator::{Annotation, EnvEntry, Kind},
-    parser::{Expr, Function, atom::Atom},
+    parser::{Expr, Function},
     reg_util::Reserved,
 };
-use ir::{IrBuilder, IrChunk, IrReg};
+use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg};
 
 
-pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntry>>
+pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntry, Kind>>
 {
-    let mut ir = IrBuilder::<EnvEntry>::default();
+    let mut ir = IrBuilder::<EnvEntry, Kind>::default();
 
     for func in &prog.functions
     {
@@ -35,22 +35,27 @@ struct GenEnv<'g, 'a>
 
 impl<'a> GenEnv<'_, 'a>
 {
-    fn generate_func(&self, ir: &mut IrBuilder<EnvEntry>)
+    fn generate_func(&self, ir: &mut IrBuilder<EnvEntry, Kind>)
     {
         let params = self
             .func
             .params
             .iter()
             .map(|param| {
-                let cell = param
+                let annotation = param
                     .data
                     .as_ref()
-                    .expect("A function parameter must be annotated")
-                    .cell;
+                    .expect("A function parameter must be annotated");
 
-                match self.env.get_unchecked(cell)
+                match self.env.get_unchecked(annotation.cell)
                 {
-                    EnvEntry::Register(reg) => IrReg::R(reg),
+                    EnvEntry::Register(reg) =>
+                    {
+                        IrTypedReg {
+                            reg: IrReg::R(reg),
+                            kind: annotation.kind,
+                        }
+                    }
                     EnvEntry::Atom(_) => unreachable!("Parameters are always stored in registers"),
                 }
             })
@@ -59,41 +64,22 @@ impl<'a> GenEnv<'_, 'a>
         ir.func(self.func.name, &params); // Genrate function head ir
         self.generate_expr(&self.func.body, ir); // Generate function body ir
 
-        let Some((ret, _)) = self.env.get_function(self.func.name)
-        else
-        {
-            unreachable!("This function must exists because it is already generating ir...")
-        };
-
-        let ret_val = {
-            // Functions without a return value or body always return 0 (in the IR), so the return register is not needed
-            if ret == Kind::None
-            {
-                // In this case, the function returns a placeholder 0 wich is never allowed to be used
-                EnvEntry::Atom(Atom::Int(0))
-            }
-            else
-            {
-                // If the function does have a body that evaluates to "something", thena that is written into a register...
-                if cell_of(&self.func.body).is_some()
-                {
-                    //... then move that value to the return register of the function
-                    ir.bind(self.entry_of(&self.func.body), Reserved::Return.into());
-                }
-
-                // In this case the function returns the return register
-                EnvEntry::Register(Reserved::Return.into())
-            }
-        };
+        // The value of the body is moved to the return register of the function.
+        // Functions without a return value return a register of type none, which can be optimized away
+        ir.bind(
+            self.entry_of(&self.func.body),
+            Reserved::Return.into(),
+            self.return_kind(),
+        );
 
         // Returning is done jumping to this return label (with a return in zk) or reaching it naturally trough the function control flow
         ir.label(self.func.return_label())
             // Maybe some side_effect or deinit code comes here
-            .ret(ret_val);
+            .ret(EnvEntry::Register(Reserved::Return.into()));
     }
 
 
-    fn generate_expr(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry>)
+    fn generate_expr(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry, Kind>)
     {
         match &expr.inner
         {
@@ -116,18 +102,18 @@ impl<'a> GenEnv<'_, 'a>
             Expr::Binop { op, lhs, rhs } => self.generate_binop(expr, op, lhs, rhs, ir),
             Expr::Unaop { op, val } => self.generate_unaop(expr, op, val, ir),
 
-            // The ir is not typed, so a cast only copies the value into the register of the cast
+            // A cast copies the value into the register of the cast, which has the target type
             Expr::Decl { val, .. } | Expr::Cast { val, .. } =>
             {
                 let val = self.generate_operand(val, ir);
-                ir.bind(val, self.register_of(expr));
+                ir.bind(val, self.register_of(expr), kind_of(expr));
             }
 
             Expr::Assign { target, source } =>
             {
                 self.generate_expr(target, ir);
                 let source = self.generate_operand(source, ir);
-                ir.bind(source, self.register_of(expr));
+                ir.bind(source, self.register_of(expr), kind_of(expr));
             }
 
             Expr::Call { name, args } =>
@@ -137,7 +123,7 @@ impl<'a> GenEnv<'_, 'a>
                     .map(|arg| self.generate_operand(arg, ir))
                     .collect::<Vec<_>>();
 
-                ir.call(*name, &args, self.register_of(expr));
+                ir.call(*name, &args, self.register_of(expr), kind_of(expr));
             }
 
             Expr::Return { val } => self.generate_return(val.as_deref(), ir),
@@ -163,16 +149,10 @@ impl<'a> GenEnv<'_, 'a>
 
 
     /// Generates the ir for `expr` and returns the entry holding its value, so it can be used as an operand
-    fn generate_operand(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry>) -> EnvEntry
+    fn generate_operand(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry, Kind>) -> EnvEntry
     {
         self.generate_expr(expr, ir);
-
-        // Values of type none (e.g. "keenop") have no cell, they are represented by 0
-        match cell_of(expr)
-        {
-            Some(_) => self.entry_of(expr),
-            None => EnvEntry::Atom(Atom::Int(0)),
-        }
+        self.entry_of(expr)
     }
 
 
@@ -180,6 +160,19 @@ impl<'a> GenEnv<'_, 'a>
     fn entry_of(&self, expr: &ExprAst<'a>) -> EnvEntry
     {
         self.env.get_unchecked(cell_of(expr))
+    }
+
+
+    /// The return type of the function ir is generated for
+    fn return_kind(&self) -> Kind
+    {
+        let Some((ret, _)) = self.env.get_function(self.func.name)
+        else
+        {
+            unreachable!("This function must exists because it is already generating ir...")
+        };
+
+        ret
     }
 
 
@@ -196,7 +189,7 @@ impl<'a> GenEnv<'_, 'a>
 
 
 /// The store cell of an annotated node
-fn cell_of(expr: &ExprAst<'_>) -> Option<usize>
+fn cell_of(expr: &ExprAst<'_>) -> usize
 {
     let Some(annotation) = &expr.data
     else
@@ -205,4 +198,17 @@ fn cell_of(expr: &ExprAst<'_>) -> Option<usize>
     };
 
     annotation.cell
+}
+
+
+/// The type of an annotated node
+fn kind_of(expr: &ExprAst<'_>) -> Kind
+{
+    let Some(annotation) = &expr.data
+    else
+    {
+        panic!("Trying to generate ir for an ast that has not yet been annotated");
+    };
+
+    annotation.kind
 }

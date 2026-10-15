@@ -1,7 +1,7 @@
-use super::{GenEnv, cell_of};
+use super::{GenEnv, kind_of};
 use crate::{
     ExprAst,
-    annotator::{Effect, EnvEntry},
+    annotator::{Effect, EnvEntry, Kind},
     reg_util::Reserved,
 };
 use iic_quote::iic_quote;
@@ -11,12 +11,16 @@ use std::iter;
 
 impl<'a> GenEnv<'_, 'a>
 {
-    pub(super) fn generate_return(&self, val: Option<&ExprAst<'a>>, ir: &mut IrBuilder<EnvEntry>)
+    pub(super) fn generate_return(
+        &self,
+        val: Option<&ExprAst<'a>>,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
+    )
     {
         if let Some(val) = val
         {
             let val = self.generate_operand(val, ir);
-            ir.bind(val, Reserved::Return.into());
+            ir.bind(val, Reserved::Return.into(), self.return_kind());
         }
 
         ir.jump(self.func.return_label());
@@ -30,7 +34,7 @@ impl<'a> GenEnv<'_, 'a>
         body: &ExprAst<'a>,
         elifs: &[(ExprAst<'a>, ExprAst<'a>)],
         else_body: Option<&ExprAst<'a>>,
-        ir: &mut IrBuilder<EnvEntry>,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
     )
     {
         // COND: IF COND
@@ -58,9 +62,10 @@ impl<'a> GenEnv<'_, 'a>
         // FINISHED: ...
 
 
-        // Wenn dieses if statement als expression mit einem wert benutzt wird, muss der
-        // wert jedes zweiges in das ergebnis register geschrieben werden
-        let reg = cell_of(expr).map(|_| self.register_of(expr));
+        // Der wert jedes zweiges wird in das ergebnis register geschrieben. Hat das if keinen
+        // wert (z.B. ohne else), ist das register vom typ none und kann wegoptimiert werden
+        let reg = self.register_of(expr);
+        let kind = kind_of(expr);
 
         // IR builder für den körper der zweige
         let mut body_builder = IrBuilder::default();
@@ -84,10 +89,7 @@ impl<'a> GenEnv<'_, 'a>
             {
                 let val = self.generate_operand(body, &mut body_builder);
 
-                if let Some(reg) = reg
-                {
-                    body_builder.bind(val, reg);
-                }
+                body_builder.bind(val, reg, kind);
             };
 
             body_builder.jump(label_finished);
@@ -99,10 +101,7 @@ impl<'a> GenEnv<'_, 'a>
         {
             {
                 let val = self.generate_operand(else_body, &mut body_builder);
-                if let Some(reg) = reg
-                {
-                    body_builder.bind(val, reg);
-                }
+                body_builder.bind(val, reg, kind);
             };
         }
 
@@ -116,7 +115,7 @@ impl<'a> GenEnv<'_, 'a>
         name: Option<&str>,
         head: Option<&ExprAst<'a>>,
         body: &ExprAst<'a>,
-        ir: &mut IrBuilder<EnvEntry>,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
     )
     {
         // HEAD: head
@@ -151,7 +150,7 @@ impl<'a> GenEnv<'_, 'a>
 
 
     /// Jumps to the end of the loop, that `expr` (a break) refers to
-    pub(super) fn generate_break(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry>)
+    pub(super) fn generate_break(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry, Kind>)
     {
         let Effect::Break { label } = effect_of(expr)
         else
@@ -164,7 +163,7 @@ impl<'a> GenEnv<'_, 'a>
 
 
     /// Jumps to the continue label of the loop, that `expr` (a continue) refers to
-    pub(super) fn generate_continue(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry>)
+    pub(super) fn generate_continue(&self, expr: &ExprAst<'a>, ir: &mut IrBuilder<EnvEntry, Kind>)
     {
         let Effect::Continue { label } = effect_of(expr)
         else

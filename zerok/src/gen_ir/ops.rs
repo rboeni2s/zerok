@@ -1,7 +1,7 @@
-use super::GenEnv;
+use super::{GenEnv, kind_of};
 use crate::{
     ExprAst,
-    annotator::EnvEntry,
+    annotator::{EnvEntry, Kind},
     parser::ops::{Binop, Unaop},
     reg_util,
 };
@@ -17,12 +17,15 @@ impl<'a> GenEnv<'_, 'a>
         op: &Binop,
         lhs: &ExprAst<'a>,
         rhs: &ExprAst<'a>,
-        ir: &mut IrBuilder<EnvEntry>,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
     )
     {
+        let exp_kind = kind_of(rhs);
+
         let lhs = self.generate_operand(lhs, ir);
         let rhs = self.generate_operand(rhs, ir);
         let reg = self.register_of(expr);
+        let kind = kind_of(expr);
 
         // Operators that map directly onto an ir operator are emitted at the end,
         // all others are built from multiple chunks
@@ -41,16 +44,16 @@ impl<'a> GenEnv<'_, 'a>
             Binop::BoolAnd => IrOp::And,
             Binop::BoolOr => IrOp::Or,
 
-            Binop::Mod | Binop::Pow if is_float(expr) =>
+            Binop::Mod | Binop::Pow if kind.is_float() =>
             {
                 todo!("The {op:?} operator is not implemented for floats in the ir yet")
             }
 
-            Binop::Mod => return generate_mod(lhs, rhs, reg, ir),
-            Binop::Pow => return self.generate_pow(lhs, rhs, reg, ir),
+            Binop::Mod => return generate_mod(lhs, rhs, reg, kind, ir),
+            Binop::Pow => return self.generate_pow(lhs, rhs, exp_kind, reg, kind, ir),
         };
 
-        ir.binop(op, lhs, rhs, reg);
+        ir.binop(op, lhs, rhs, reg, kind);
     }
 
 
@@ -59,7 +62,7 @@ impl<'a> GenEnv<'_, 'a>
         expr: &ExprAst<'a>,
         op: &Unaop,
         val: &ExprAst<'a>,
-        ir: &mut IrBuilder<EnvEntry>,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
     )
     {
         let val = self.generate_operand(val, ir);
@@ -70,11 +73,19 @@ impl<'a> GenEnv<'_, 'a>
             Unaop::BoolNot => IrOp::Not,
         };
 
-        ir.unaop(op, val, self.register_of(expr));
+        ir.unaop(op, val, self.register_of(expr), kind_of(expr));
     }
 
 
-    fn generate_pow(&self, base: EnvEntry, exp: EnvEntry, reg: usize, ir: &mut IrBuilder<EnvEntry>)
+    fn generate_pow(
+        &self,
+        base: EnvEntry,
+        exp: EnvEntry,
+        exp_kind: Kind,
+        reg: usize,
+        kind: Kind,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
+    )
     {
         let loop_label = &self.func.unique_label();
         let end_label = &self.func.unique_label();
@@ -83,16 +94,16 @@ impl<'a> GenEnv<'_, 'a>
         let done = reg_util::next_register();
 
         ir.append(iic_quote! {
-            R(reg) = 1;
-            R(counter) = exp;
+            R(reg, kind) = 1;
+            R(counter, exp_kind) = exp;
 
             loop_label:
 
-                R(done) = R(counter) <= 0;
+                R(done, Kind::Bool) = R(counter) <= 0;
                 if R(done) goto end_label;
 
-                R(reg) = R(reg) * base;
-                R(counter) = R(counter) - 1;
+                R(reg, kind) = R(reg) * base;
+                R(counter, exp_kind) = R(counter) - 1;
                 goto loop_label;
 
             end_label:
@@ -102,19 +113,17 @@ impl<'a> GenEnv<'_, 'a>
 
 
 /// a % b = a - (a / b) * b
-fn generate_mod(lhs: EnvEntry, rhs: EnvEntry, reg: usize, ir: &mut IrBuilder<EnvEntry>)
+fn generate_mod(
+    lhs: EnvEntry,
+    rhs: EnvEntry,
+    reg: usize,
+    kind: Kind,
+    ir: &mut IrBuilder<EnvEntry, Kind>,
+)
 {
     ir.append(iic_quote! {
-        R(reg) = lhs.clone() / rhs.clone();
-        R(reg) = R(reg) * rhs;
-        R(reg) = lhs - R(reg);
+        R(reg, kind) = lhs.clone() / rhs.clone();
+        R(reg, kind) = R(reg) * rhs;
+        R(reg, kind) = lhs - R(reg);
     });
-}
-
-
-fn is_float(expr: &ExprAst<'_>) -> bool
-{
-    expr.data
-        .as_ref()
-        .is_some_and(|annotation| annotation.kind.is_float())
 }

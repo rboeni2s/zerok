@@ -1,4 +1,7 @@
-use crate::{annotator::EnvEntry, parser::atom::Atom};
+use crate::{
+    annotator::{EnvEntry, Kind},
+    parser::atom::Atom,
+};
 use ir::{ToIIC, ToIrReg, ToIrVal};
 
 
@@ -61,5 +64,14 @@ impl ToIIC for EnvEntry
                 }
             }
         }
+    }
+}
+
+
+impl ToIIC for Kind
+{
+    fn to_iic(&self) -> String
+    {
+        self.to_string()
     }
 }

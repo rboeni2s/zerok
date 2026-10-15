@@ -1,4 +1,4 @@
-use super::{IrChunk, IrOp, IrReg};
+use super::{IrChunk, IrOp, IrReg, IrTypedReg};
 
 
 pub trait ToIIC
@@ -59,9 +59,20 @@ impl ToIIC for IrReg
     }
 }
 
-impl<T> ToIIC for IrChunk<T>
+impl<K> ToIIC for IrTypedReg<K>
+where
+    K: ToIIC,
+{
+    fn to_iic(&self) -> String
+    {
+        format!("{}: {}", self.reg.to_iic(), self.kind.to_iic())
+    }
+}
+
+impl<T, K> ToIIC for IrChunk<T, K>
 where
     T: ToIIC,
+    K: ToIIC,
     Vec<T>: ToIIC,
 {
     const SEPERATOR: &str = "\n";

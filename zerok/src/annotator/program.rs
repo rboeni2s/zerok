@@ -118,7 +118,7 @@ impl<'a> Function<'a, Option<Annotation>>
 
             let annotation = Annotation {
                 kind,
-                cell: Some(new_register(&fn_env)),
+                cell: new_register(&fn_env),
                 effect: Effect::None,
             };
 

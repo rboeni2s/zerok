@@ -118,13 +118,11 @@ impl<'a, T> Env<'a, T>
         self.functions.borrow().get(name).cloned()
     }
 
-    /// Gets the entry of `cell`, panics if there is no cell or it does not exist
-    pub fn get_unchecked(&self, cell: Option<usize>) -> T
+    /// Gets the entry of `cell`, panics if it does not exist
+    pub fn get_unchecked(&self, cell: usize) -> T
     where
         T: Clone,
     {
-        let cell = cell.expect("Trying to read an entry without a cell");
-
         self.get(cell)
             .unwrap_or_else(|| panic!("Cell {cell} does not exist in the store"))
     }
@@ -165,15 +163,9 @@ impl<'a, T> Env<'a, T>
     /// Binds a store cell to a store entry
     pub fn bind_cell(&self, name: &'a str, annotation: &Annotation)
     {
-        self.bindings.borrow_mut().insert(
-            name,
-            (
-                annotation.kind,
-                annotation
-                    .cell
-                    .expect("Malformed annotation without a store cell bound to a binding"),
-            ),
-        );
+        self.bindings
+            .borrow_mut()
+            .insert(name, (annotation.kind, annotation.cell));
     }
 
     /// Gets the store cell `name`

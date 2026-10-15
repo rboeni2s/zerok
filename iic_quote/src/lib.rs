@@ -27,9 +27,17 @@ enum IicReg
 }
 
 
-impl Parse for IicReg
+/// A register that is written to, together with the type of its value
+struct IicTypedReg
 {
-    /// parse register expressions like "R(n + 1)" or "G(39)"
+    reg: IicReg,
+    kind: syn::Expr,
+}
+
+
+impl Parse for IicTypedReg
+{
+    /// parse typed register expressions like "R(n + 1, Kind::U32)" or "G(39, kind)"
     fn parse(input: ParseStream) -> Result<Self>
     {
         let ident: syn::Ident = input.parse()?;
@@ -37,18 +45,36 @@ impl Parse for IicReg
         let content;
         syn::parenthesized!(content in input);
 
-        match ident.to_string().as_str()
+        let val: syn::Expr = content.parse()?;
+
+        if !content.peek(Token![,])
         {
-            "R" | "r" => Ok(Self::R(content.parse()?)),
-            "G" | "g" => Ok(Self::G(content.parse()?)),
+            return Err(content
+                .error("expected the type of the register, like R(expr, kind) or G(expr, kind)"));
+        }
+
+        content.parse::<Token![,]>()?;
+        let kind = content.parse()?;
+
+        if !content.is_empty()
+        {
+            return Err(content.error("expected a register R(expr, kind) or G(expr, kind)"));
+        }
+
+        let reg = match ident.to_string().as_str()
+        {
+            "R" | "r" => IicReg::R(val),
+            "G" | "g" => IicReg::G(val),
             _ =>
             {
-                Err(syn::Error::new(
+                return Err(syn::Error::new(
                     ident.span(),
-                    "expected a register G(expr) or R(expr)",
-                ))
+                    "expected a register G(expr, kind) or R(expr, kind)",
+                ));
             }
-        }
+        };
+
+        Ok(Self { reg, kind })
     }
 }
 
@@ -176,25 +202,28 @@ enum IicChunk
         op: IicOp,
         lhs: IicVal,
         rhs: IicVal,
-        reg: IicReg,
+        reg: IicTypedReg,
     },
 
     // reg = op arg
     Una
     {
-        op: IicOp, arg: IicVal, reg: IicReg
+        op: IicOp,
+        arg: IicVal,
+        reg: IicTypedReg,
     },
 
     // reg = val
     Bind
     {
-        val: IicVal, reg: IicReg
+        val: IicVal, reg: IicTypedReg
     },
 
-    // define name(arg1, arg2, arg3, ...):
+    // define name(R(a, kind), R(b, kind), ...):
     Func
     {
-        name: syn::Expr, args: Vec<IicReg>
+        name: syn::Expr,
+        args: Vec<IicTypedReg>,
     },
 
     // reg = call name(arg1, arg2, arg3, ...)
@@ -202,7 +231,7 @@ enum IicChunk
     {
         name: syn::Expr,
         args: Vec<IicVal>,
-        reg: IicReg,
+        reg: IicTypedReg,
     },
 
     // ret val
@@ -339,7 +368,7 @@ impl Parse for IicChunk
 
             let content;
             syn::parenthesized!(content in input);
-            let args = Punctuated::<IicReg, Token![,]>::parse_terminated(&content)?;
+            let args = Punctuated::<IicTypedReg, Token![,]>::parse_terminated(&content)?;
             input.parse::<Token![:]>()?;
 
             return Ok(Self::Func {
@@ -402,17 +431,24 @@ impl Parse for IicChunk
 }
 
 
+/// Checks for `R(..) =` or `G(..) =`, the type of the register is checked when the assignment is parsed
 fn peek_assignment(input: ParseStream) -> bool
 {
     let fork = input.fork();
-    fork.parse::<IicReg>().is_ok() && fork.peek(Token![=]) && !fork.peek(Token![==])
+
+    fork.parse::<syn::Ident>()
+        .is_ok_and(|ident| ["R", "r", "G", "g"].contains(&ident.to_string().as_str()))
+        && fork.peek(syn::token::Paren)
+        && fork.parse::<TokenTree>().is_ok()
+        && fork.peek(Token![=])
+        && !fork.peek(Token![==])
 }
 
 
 /// Parses all chunks of the form `reg = ...`
 fn parse_assignment(input: ParseStream) -> Result<IicChunk>
 {
-    let reg: IicReg = input.parse()?;
+    let reg: IicTypedReg = input.parse()?;
     input.parse::<Token![=]>()?;
 
     // reg = op arg
@@ -490,6 +526,16 @@ impl ToTokens for IicReg
             IicReg::R(val) => quote!(::ir::IrReg::R(#val)),
             IicReg::G(val) => quote!(::ir::IrReg::G(#val)),
         });
+    }
+}
+
+
+impl ToTokens for IicTypedReg
+{
+    fn to_tokens(&self, tokens: &mut TokenStream)
+    {
+        let Self { reg, kind } = self;
+        tokens.extend(quote!(::ir::IrTypedReg { reg: #reg, kind: #kind }));
     }
 }
 

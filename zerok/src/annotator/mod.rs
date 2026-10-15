@@ -46,20 +46,21 @@ pub struct Annotation
     /// Inferred or given type
     pub kind: Kind,
 
-    /// store cell index
-    pub cell: Option<usize>,
+    /// store cell index, values of type none also get a register so they can be used like any other value
+    pub cell: usize,
 
     pub effect: Effect,
 }
 
 
-impl Default for Annotation
+impl Annotation
 {
-    fn default() -> Self
+    /// The annotation of a node without a value, it gets a new register of type none
+    fn none(env: &Env<'_, EnvEntry>) -> Self
     {
         Self {
             kind: Kind::None,
-            cell: None,
+            cell: new_register(env),
             effect: Effect::None,
         }
     }
@@ -116,7 +117,7 @@ impl<'a> Node<'a, Option<Annotation>>
         expected: Option<Kind>,
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
-        let mut last_annotation = Annotation::default();
+        let mut last_annotation = None;
 
         // Only the last expression of a chain determines its type
         let last = ast_nodes.len().saturating_sub(1);
@@ -124,10 +125,11 @@ impl<'a> Node<'a, Option<Annotation>>
         for (i, ast) in ast_nodes.iter_mut().enumerate()
         {
             last_annotation =
-                ast.annotate_expecting(env, if i == last { expected } else { None })?;
+                Some(ast.annotate_expecting(env, if i == last { expected } else { None })?);
         }
 
-        Ok(last_annotation)
+        // An empty chain has no value
+        Ok(last_annotation.unwrap_or_else(|| Annotation::none(env)))
     }
 
     /// Annotates this node, but if it is a chain it does not open its own scope, so its bindings stay visible in `env`.
@@ -228,14 +230,7 @@ impl<'a> Node<'a, Option<Annotation>>
             {
                 match atom
                 {
-                    Atom::Nop =>
-                    {
-                        Ok(Annotation {
-                            kind: Kind::None,
-                            cell: None,
-                            effect: Effect::None,
-                        })
-                    }
+                    Atom::Nop => Ok(Annotation::none(env)),
 
                     atom =>
                     {
@@ -248,7 +243,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                         Ok(Annotation {
                             kind,
-                            cell: Some(env.put(EnvEntry::Atom(atom.clone()))),
+                            cell: env.put(EnvEntry::Atom(atom.clone())),
                             effect: Effect::None,
                         })
                     }
@@ -280,7 +275,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         Ok(Annotation {
                             kind: ret,
-                            cell: Some(new_register(env)),
+                            cell: new_register(env),
                             effect: Effect::None,
                         })
                     }
@@ -307,7 +302,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     {
                         Ok(Annotation {
                             kind: ret,
-                            cell: Some(new_register(env)),
+                            cell: new_register(env),
                             effect: Effect::None,
                         })
                     }
@@ -328,7 +323,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 let annotation = Annotation {
                     kind,
-                    cell: Some(new_register(env)),
+                    cell: new_register(env),
                     effect: Effect::None,
                 };
 
@@ -347,7 +342,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 Ok(Annotation {
                     kind,
-                    cell: Some(cell),
+                    cell,
                     effect: Effect::None,
                 })
             }
@@ -374,7 +369,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 Ok(Annotation {
                     kind,
-                    cell: Some(new_register(env)),
+                    cell: new_register(env),
                     effect: Effect::None,
                 })
             }
@@ -413,7 +408,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 // Every call gets a register, even if the function does not return anything (it then returns 0)
                 Ok(Annotation {
                     kind: ret,
-                    cell: Some(new_register(env)),
+                    cell: new_register(env),
                     effect: Effect::None,
                 })
             }
@@ -431,7 +426,7 @@ impl<'a> Node<'a, Option<Annotation>>
                     Some(val) => val.annotate_as(&env.child_env(), ret, "The returned value")?,
 
                     // A return without a value returns nothing
-                    None if ret == Kind::None => Annotation::default(),
+                    None if ret == Kind::None => Annotation::none(env),
                     None =>
                     {
                         return err!(span, "A function returning {} has to return a value", ret);
@@ -449,7 +444,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 else_body,
             } =>
             {
-                // Without an else there is no value if no condition is true, so the if does not have a value then
+                // Without an else there is no value if no condition is true, so the if is of type none then
                 let has_else = else_body.is_some();
                 let expected = if has_else { expected } else { None };
 
@@ -480,7 +475,7 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 match else_body
                 {
-                    None => Ok(Annotation::default()),
+                    None => Ok(Annotation::none(env)),
 
                     Some(else_body) =>
                     {
@@ -489,7 +484,7 @@ impl<'a> Node<'a, Option<Annotation>>
                         // Every branch writes its value into the register of the if
                         Ok(Annotation {
                             kind,
-                            cell: (kind != Kind::None).then(|| new_register(env)),
+                            cell: new_register(env),
                             effect: Effect::None,
                         })
                     }
@@ -517,7 +512,7 @@ impl<'a> Node<'a, Option<Annotation>>
                             ..head.annotate_in_scope(&scope, expected)?
                         }
                     }
-                    None => Annotation::default(),
+                    None => Annotation::none(env),
                 };
 
                 // replace the loop name with the label
@@ -539,7 +534,7 @@ impl<'a> Node<'a, Option<Annotation>>
                             effect: Effect::Break {
                                 label: label.into(),
                             },
-                            ..Default::default()
+                            ..Annotation::none(env)
                         })
                     }
 
@@ -564,7 +559,7 @@ impl<'a> Node<'a, Option<Annotation>>
                             effect: Effect::Continue {
                                 label: label.into(),
                             },
-                            ..Default::default()
+                            ..Annotation::none(env)
                         })
                     }
 
@@ -584,7 +579,7 @@ impl<'a> Node<'a, Option<Annotation>>
                 let target = target.annotate(env)?;
                 let _source = source.annotate_as(env, target.kind, "This Value")?;
 
-                let target_cell = target.cell.and_then(|c| env.get(c));
+                let target_cell = env.get(target.cell);
 
                 match matches!(target_cell, None | Some(EnvEntry::Atom(_)))
                 {

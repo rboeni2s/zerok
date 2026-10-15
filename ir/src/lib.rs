@@ -56,37 +56,49 @@ pub enum IrReg
 }
 
 
+/// A register that is written to, together with the type of the value it holds
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct IrTypedReg<K>
+{
+    pub reg: IrReg,
+    pub kind: K,
+}
+
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum IrChunk<T>
+pub enum IrChunk<T, K>
 {
     Bin
     {
         op: IrOp,
         lhs: T,
         rhs: T,
-        reg: IrReg,
+        reg: IrTypedReg<K>,
     },
 
     Una
     {
-        op: IrOp, arg: T, reg: IrReg
+        op: IrOp,
+        arg: T,
+        reg: IrTypedReg<K>,
     },
 
     Bind
     {
-        val: T, reg: IrReg
+        val: T, reg: IrTypedReg<K>
     },
 
     Func
     {
-        name: String, args: Vec<IrReg>
+        name: String,
+        args: Vec<IrTypedReg<K>>,
     },
 
     Call
     {
         name: String,
         args: Vec<T>,
-        reg: IrReg,
+        reg: IrTypedReg<K>,
     },
 
     Ret
