@@ -1,3 +1,6 @@
+#![feature(hash_set_entry)]
+
+
 pub mod annotator;
 pub mod diagnostic;
 pub mod gen_ir;

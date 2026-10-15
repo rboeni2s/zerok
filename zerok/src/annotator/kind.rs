@@ -4,11 +4,15 @@ use crate::parser::{
     atom::Atom,
     ops::{Binop, Unaop},
 };
-use std::fmt;
+use std::{
+    collections::HashSet,
+    fmt,
+    sync::{LazyLock, Mutex},
+};
 
 
 /// The Type of a node in the ast
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Kind
 {
     U32,
@@ -20,14 +24,41 @@ pub enum Kind
     String,
     None,
     Bool,
+    Ref(&'static Self),
 }
 
 
 impl Kind
 {
+    pub fn referenced(self) -> Self
+    {
+        // Ich hätte gerne, dass Kind: Copy bleibt, Also leake ich für jeden Typ einfach einmal
+        // eine reference zu ihm so dass ich in Kind::Ref(referenced) eine statische reference für referenced benutzen kann
+        //
+        // Ich würde super gern einen statischen lut benutzen mit den enum descriminants, dann kann man aber
+        // keine (beliebigen) Ref(Ref(kind)) haben. Also muss ich den lut als hashmap zur laufzeit bauen...
+        // wenn ich später user defined types habe brauche ich das sowie so...
+        static LEAKY_TABLE: LazyLock<Mutex<HashSet<&'static Kind>>> =
+            LazyLock::new(Default::default);
+
+        // Mit auto deref wird &Kind draus... ich brauche aber spezifisch die leaked &'static aus dem table
+        #[allow(clippy::explicit_auto_deref)]
+        Self::Ref(
+            *LEAKY_TABLE
+                .lock()
+                .unwrap()
+                .get_or_insert_with(&self, |_| Box::leak(Box::new(self))),
+        )
+    }
+
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(value: &str) -> Option<Self>
     {
+        if let Some(inner) = value.strip_prefix("&")
+        {
+            return Self::from_str(inner).map(Self::referenced);
+        }
+
         match value
         {
             "u32" => Some(Kind::U32),
@@ -43,14 +74,12 @@ impl Kind
         }
     }
 
-    /// The type of a type written in the source
-    //TODO: References are not supported by the typechecker yet
     pub fn from_type(ty: &Type<'_>) -> Option<Self>
     {
         match ty
         {
             Type::Name(name) => Self::from_str(name),
-            Type::Ref(_) => None,
+            Type::Ref(inner) => Self::from_type(inner).map(Self::referenced),
         }
     }
 
@@ -117,6 +146,7 @@ impl fmt::Display for Kind
             Kind::String => "string",
             Kind::None => "none",
             Kind::Bool => "bool",
+            Kind::Ref(kind) => return write!(f, "&{kind}"),
         };
 
         write!(f, "{name}")
