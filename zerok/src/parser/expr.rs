@@ -94,6 +94,24 @@ pub enum Expr<'src, D>
 
     Chain(Vec<Node<'src, D>>),
 
+    NewVector
+    {
+        kind: Type<'src>,
+        length: Box<Node<'src, D>>,
+        default: Box<Node<'src, D>>,
+    },
+
+    VectorShorthand
+    {
+        items: Vec<Node<'src, D>>,
+    },
+
+    Offset
+    {
+        target: Box<Node<'src, D>>,
+        offset: Box<Node<'src, D>>,
+    },
+
     // Placeholder for a something that could not be parsed.
     ParseError,
 }
@@ -171,6 +189,8 @@ where
 
                 // Operands to operators can either be an atom or a (chained) expression
                 let operand = choice((
+                    Self::vector_parser(chain.clone()),
+                    Self::vector_shorthand_parser(chain.clone()),
                     atom.clone(),
                     parenthesized,
                     decl,
@@ -181,7 +201,8 @@ where
                     Self::loop_parser(chain.clone()),
                     Self::break_parser(),
                     Self::continue_parser(),
-                ));
+                ))
+                .boxed();
 
                 // Parse the different operators and set their associativity and precedence
                 let operation = operand.pratt((
@@ -227,7 +248,14 @@ where
                     // "!a == b" is "(!a) == b", "-a ** 2" is "-(a ** 2)" and "&a + b" is "(&a) + b"
                     prefix(
                         6,
-                        choice((Unaop::neg(), Unaop::bool_not(), Unaop::reference())),
+                        choice((
+                            Unaop::neg(),
+                            Unaop::bool_not(),
+                            // "&bool[10: nee]" is a vector declaration and not a reference to "bool", so don't treat
+                            // "&" as an operator if it is followed by a type and "["
+                            Unaop::reference()
+                                .then_ignore(Type::parser().then(just(Token::LBracket)).not()),
+                        )),
                         |op, val, info| Self::unaop(op, val, info.span()),
                     ),
                     // "&&" is lexed as one token, so "&&a" is a reference to a reference
@@ -263,6 +291,7 @@ where
 
                         AstNode::new(expr, info.span())
                     })
+                    .boxed()
             }
         });
 
@@ -311,6 +340,52 @@ where
 
         chain
     }
+
+    /// Parses a vector shorthand like `&[1, 2, 3]`
+    pub fn vector_shorthand_parser<'t>(
+        expr: impl P<'t, 'src, Node<'src, D>>,
+    ) -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
+    {
+        just(Token::Ref)
+            .ignore_then(
+                expr.separated_by(just(Token::Comma))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(Token::LBracket), just(Token::RBracket)),
+            )
+            .map_with(|items, info| AstNode::new(Expr::VectorShorthand { items }, info.span()))
+    }
+
+
+    /// Parses a vector declaration like `&kind[length: default]`
+    pub fn vector_parser<'t>(
+        expr: impl P<'t, 'src, Node<'src, D>>,
+    ) -> impl P<'t, 'src, Node<'src, D>>
+    where
+        'src: 't,
+    {
+        just(Token::Ref)
+            .ignore_then(Type::parser())
+            .then(
+                expr.clone()
+                    .then_ignore(just(Token::Doublecolon))
+                    .then(expr)
+                    .delimited_by(just(Token::LBracket), just(Token::RBracket)),
+            )
+            .map_with(|(kind, (length, default)), info| {
+                AstNode::new(
+                    Expr::NewVector {
+                        kind,
+                        length: Box::new(length),
+                        default: Box::new(default),
+                    },
+                    info.span(),
+                )
+            })
+    }
+
 
     /// Parsers If statements with optional elif branches and an else block
     fn if_parser<'t>(chain: impl P<'t, 'src, Node<'src, D>>) -> impl P<'t, 'src, Node<'src, D>>

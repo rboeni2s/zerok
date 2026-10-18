@@ -12,6 +12,9 @@ pub enum Type<'src>
 
     /// A reference to a value of the inner type on the heap, e.g. "&u32"
     Ref(Box<Type<'src>>),
+
+    /// A reference to a vector on the heap
+    Vector(Box<Type<'src>>),
 }
 
 
@@ -25,6 +28,11 @@ impl<'src> Type<'src>
 
         recursive(|ty| {
             choice((
+                // [u32]
+                ty.clone()
+                    .delimited_by(just(Token::LBracket), just(Token::RBracket))
+                    .map(|ty| Self::Vector(Box::new(ty))),
+                // &u32
                 just(Token::Ref)
                     .ignore_then(ty.clone())
                     .map(|ty| Self::Ref(Box::new(ty))),
@@ -34,7 +42,9 @@ impl<'src> Type<'src>
                     .map(|ty| Self::Ref(Box::new(Self::Ref(Box::new(ty))))),
                 ident.map(Self::Name),
             ))
+            .boxed()
         })
+        .boxed()
     }
 }
 
@@ -55,7 +65,8 @@ impl fmt::Display for Type<'_>
         match self
         {
             Type::Name(name) => write!(f, "{name}"),
-            Type::Ref(ty) => write!(f, "&{ty}"),
+            Type::Ref(inner) => write!(f, "&{inner}"),
+            Type::Vector(element) => write!(f, "[{element}]"),
         }
     }
 }

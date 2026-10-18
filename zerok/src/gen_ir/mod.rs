@@ -1,6 +1,7 @@
 mod control;
 mod conversions;
 mod ops;
+mod vector;
 
 use crate::{
     Env,
@@ -155,6 +156,12 @@ impl<'a> GenEnv<'_, 'a>
 
             Expr::Break { .. } => self.generate_break(expr, ir),
             Expr::Continue { .. } => self.generate_continue(expr, ir),
+
+            Expr::NewVector {
+                length, default, ..
+            } => self.generate_new_vector(expr, length, default, ir),
+
+            Expr::VectorShorthand { items } => self.generate_vector_shorthand(expr, items, ir),
 
             Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
         }

@@ -663,6 +663,68 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(target)
             }
 
+            Expr::NewVector {
+                kind,
+                length,
+                default,
+            } =>
+            {
+                let Some(kind) = Kind::from_type(kind)
+                else
+                {
+                    return err!(span, "Unknown type \"{}\"", kind);
+                };
+
+                length.annotate_as(env, Kind::U64, "The length of the vector")?;
+                default.annotate_as(env, kind, "The default value of the vector")?;
+
+                Ok(Annotation {
+                    kind: kind.referenced(),
+                    cell: new_register(env),
+                    effect: Effect::None,
+                })
+            }
+
+            Expr::VectorShorthand { items } =>
+            {
+                let kind = match expected
+                {
+                    Some(kind) =>
+                    {
+                        match kind
+                        {
+                            Kind::Ref(kind) => *kind,
+                            kind => kind,
+                        }
+                    }
+
+                    // If the expected type is not know, try and use the type if the first item
+                    None =>
+                    {
+                        if items.is_empty()
+                        {
+                            return err!(
+                                span,
+                                "Cannot use vector shorthand to create a vector of an unknown type"
+                            );
+                        }
+
+                        items[0].annotate(env)?.kind
+                    }
+                };
+
+                for item in items
+                {
+                    item.annotate_as(env, kind, "The element of the vector")?;
+                }
+
+                Ok(Annotation {
+                    kind: kind.referenced(),
+                    cell: new_register(env),
+                    effect: Effect::None,
+                })
+            }
+
             Expr::ParseError =>
             {
                 err!(

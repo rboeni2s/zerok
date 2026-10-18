@@ -89,6 +89,7 @@ impl Kind
         {
             Type::Name(name) => Self::from_str(name),
             Type::Ref(inner) => Self::from_type(inner).map(Self::referenced),
+            Type::Vector(inner) => Self::from_type(inner).map(Self::referenced),
         }
     }
 

@@ -15,5 +15,8 @@ op main() -> u32
     sett mysterious_counter: &u32 = &1;
     double(mysterious_counter, 10); // 1024
 
+    sett array1: [bool] = &bool[10: nee];
+    sett array2: [bool] = &[ja, nee == ja, nee];
+
     mysterious_counter
 }

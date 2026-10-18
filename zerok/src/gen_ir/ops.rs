@@ -2,10 +2,7 @@ use super::{GenEnv, kind_of};
 use crate::{
     ExprAst,
     annotator::{EnvEntry, Kind},
-    parser::{
-        atom::Atom,
-        ops::{Binop, Unaop},
-    },
+    parser::ops::{Binop, Unaop},
     reg_util,
 };
 use iic_quote::iic_quote;
