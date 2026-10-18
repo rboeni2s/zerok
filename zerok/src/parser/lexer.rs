@@ -25,7 +25,8 @@ pub enum Token<'src>
     Num(u64),
     Float(f64),
     Bool(bool),
-    Str(&'src str),
+    Char(char),
+    Str(String),
     Ident(&'src str),
 
     // Keywords
@@ -83,7 +84,8 @@ impl fmt::Display for Token<'_>
             Token::Float(n) => write!(f, "{n}f"),
             Token::Bool(true) => write!(f, "{KW_TRUE}"),
             Token::Bool(false) => write!(f, "{KW_FALSE}"),
-            Token::Str(s) => write!(f, "\"{s}\""),
+            Token::Char(c) => write!(f, "{c:?}"),
+            Token::Str(s) => write!(f, "{s:?}"),
             Token::Ident(name) => write!(f, "{name}"),
             Token::Decl => write!(f, "{KW_DECL}"),
             Token::Nop => write!(f, "{KW_NOP}"),
@@ -189,9 +191,71 @@ pub fn lexer<'src>()
         .unwrapped()
         .map(Token::Float);
 
-    let string = one_of("\"")
-        .ignore_then(none_of("\"").repeated().to_slice())
-        .then_ignore(one_of("\""))
+    // string escapes wie "\n", "\'" or "\u{1F600}"
+    let escape = just('\\').ignore_then(choice((
+        just('n').to('\n'),
+        just('t').to('\t'),
+        just('r').to('\r'),
+        just('0').to('\0'),
+        just('\\'),
+        just('\''),
+        just('"'),
+        text::digits(16)
+            .to_slice()
+            .delimited_by(just("u{"), just('}'))
+            .validate(|digits: &str, info, emitter| {
+                u32::from_str_radix(digits, 16)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .unwrap_or_else(|| {
+                        emitter.emit(Rich::custom(
+                            info.span(),
+                            format!("\\u{{{digits}}} is not a unicode character"),
+                        ));
+                        '\0'
+                    })
+            }),
+        any().validate(|c: char, info, emitter| {
+            emitter.emit(Rich::custom(
+                info.span(),
+                format!("Unknown escape sequence \\{c}"),
+            ));
+            c
+        }),
+    )));
+
+    // A char is a single unicode codepoint
+    let char = escape
+        .clone()
+        .or(none_of("\\'\n"))
+        .delimited_by(just('\''), just('\''))
+        .map(Token::Char);
+
+    // Manche buchstaben sind aus mehreren codepoints gemacht etwa ein hand emoji mit hautfarbe '👍🏽'
+    // anstatt mich damit rumzuärgern verbiete ich sowas einfach (erstmal)
+    let long_char = none_of("'\n")
+        .filter(|c: &char| !c.is_whitespace() && *c != ';')
+        .repeated()
+        .at_least(2)
+        .to_slice()
+        .delimited_by(just('\''), just('\''))
+        .validate(|chars: &str, info, emitter| {
+            emitter.emit(Rich::custom(
+                info.span(),
+                format!(
+                    "A char is a single unicode codepoint, but '{chars}' consists of {} codepoints",
+                    chars.chars().count()
+                ),
+            ));
+            chars.chars().next().unwrap_or_default()
+        })
+        .map(Token::Char);
+
+    let string = escape
+        .or(none_of("\\\""))
+        .repeated()
+        .collect::<String>()
+        .delimited_by(just('"'), just('"'))
         .map(Token::Str);
 
     // Identifiers are lexed as a whole, so that keywords are only recognized if they are not a prefix of an identifier
@@ -251,7 +315,8 @@ pub fn lexer<'src>()
         just("'").to(Token::Tick),
     ));
 
-    let token = choice((float, num, string, ident, symbol))
+    // Chars have to be checked before the "'" of labels
+    let token = choice((float, num, char, long_char, string, ident, symbol))
         .map_with(|token, info| (token, info.span()))
         // Skip characters that do not start a valid token, so that the rest of the input can still be lexed
         .recover_with(skip_then_retry_until(any().ignored(), end()));

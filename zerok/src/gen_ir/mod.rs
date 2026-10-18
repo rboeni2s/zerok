@@ -8,7 +8,7 @@ use crate::{
     ExprAst,
     ProgAst,
     annotator::{Annotation, EnvEntry, Kind},
-    parser::{Expr, Function},
+    parser::{Expr, Function, atom::Atom},
     reg_util::Reserved,
 };
 use iic_quote::iic_quote;
@@ -90,6 +90,8 @@ impl<'a> GenEnv<'_, 'a>
             // Binding: The value of a binding already is in the register of its declaration...
             //
             // So in both cases no ir needs to be generated...
+            Expr::Atom(Atom::Str(string)) => self.generate_string(expr, string, ir),
+
             Expr::Atom(_) | Expr::Binding { .. } =>
             {}
 

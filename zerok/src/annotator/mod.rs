@@ -268,6 +268,16 @@ impl<'a> Node<'a, Option<Annotation>>
                 {
                     Atom::Nop => Ok(Annotation::none(env)),
 
+                    // A string is a "[char]", which is created on the heap like a vector shorthand, so it needs a register
+                    Atom::Str(_) =>
+                    {
+                        Ok(Annotation {
+                            kind: Kind::Char.referenced(),
+                            cell: new_register(env),
+                            effect: Effect::None,
+                        })
+                    }
+
                     atom =>
                     {
                         let kind = Kind::of_atom(atom, expected);
@@ -404,13 +414,19 @@ impl<'a> Node<'a, Option<Annotation>>
                     return err!(span, "Cannot cast to none");
                 }
 
-                let original = val.annotate_expecting(&env.child_env(), Some(kind))?.kind;
+                // A char can only be cast from a u32, so e.g. "65 as char" casts a u32 literal
+                let expected = if kind == Kind::Char { Kind::U32 } else { kind };
+                let original = val
+                    .annotate_expecting(&env.child_env(), Some(expected))?
+                    .kind;
 
                 // A cast also dereferences, until the value has the target type or is no reference anymore,
-                // e.g. "a as u32" and "a as u64" read the u32 a "&u32" points to
+                // e.g. "a as u32" and "a as u64" read the u32 a "&u32" points to.
+                // A "&char" is also a string, so it is only dereferenced for a char, otherwise "text" as u32 would be 't'
                 let mut from = original;
                 while let Kind::Ref(&inner) = from
                     && from != kind
+                    && (inner != Kind::Char || kind == Kind::Char)
                 {
                     from = val.deref_once(env, inner).kind;
                 }

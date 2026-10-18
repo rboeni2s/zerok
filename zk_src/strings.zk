@@ -1,0 +1,16 @@
+op main() -> u32
+{
+    sett text: string = "OMG😱 unicode!!!¹²³ ¼ ½ ¬ ÄÜÖ ê è é";
+    ice_print(text);
+    ice_print(&text[3]);
+
+    // Thumbsup mit einem zusätzlichen hauton als einzelner char geht nicht
+    // sett okay: char = '👍🏿'; // auskommentiert, weil geht nicht
+    sett okay_as_2_chars: [char] = ['\u{1F44D}', '\u{1F3FF}']; // Aber jeder codepoint kann einzelnt als char dargestellt werden
+    sett okay_as_string: string = "👍🏿"; // Oder direkt als string
+    
+    ice_print(okay_as_2_chars);
+    ice_print(okay_as_string);
+
+    0
+}

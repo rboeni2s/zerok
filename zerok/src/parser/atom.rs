@@ -11,6 +11,7 @@ use std::fmt;
 pub enum Atom
 {
     Str(String),
+    Char(char),
     Int(u64),
     Float(f64),
     Bool(bool),
@@ -23,7 +24,8 @@ impl Atom
     pub fn parser<'t, 's: 't>() -> impl P<'t, 's, Self>
     {
         select! {
-            Token::Str(s) => Self::Str(s.to_string()),
+            Token::Str(s) => Self::Str(s),
+            Token::Char(c) => Self::Char(c),
             Token::Num(n) => Self::Int(n),
             Token::Float(n) => Self::Float(n),
             Token::Bool(b) => Self::Bool(b),
@@ -40,7 +42,8 @@ impl fmt::Display for Atom
     {
         match self
         {
-            Atom::Str(s) => write!(f, "\"{s}\""),
+            Atom::Str(s) => write!(f, "{s:?}"),
+            Atom::Char(c) => write!(f, "{c:?}"),
             Atom::Int(n) => write!(f, "{n}"),
             Atom::Float(n) => write!(f, "{n}f"),
             Atom::Bool(true) => write!(f, "{KW_TRUE}"),

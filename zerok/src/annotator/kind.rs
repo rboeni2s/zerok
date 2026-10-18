@@ -21,7 +21,7 @@ pub enum Kind
     I64,
     F32,
     F64,
-    String,
+    Char, // A unicode codepoint, a string is a "[char]"
     None,
     Bool,
     Ref(&'static Self),
@@ -76,7 +76,8 @@ impl Kind
             "i64" => Some(Kind::I64),
             "f32" => Some(Kind::F32),
             "f64" => Some(Kind::F64),
-            "string" => Some(Kind::String),
+            "char" => Some(Kind::Char),
+            "string" => Some(Kind::Char.referenced()),
             "none" => Some(Kind::None),
             "bool" => Some(Kind::Bool),
             _ => None,
@@ -129,7 +130,8 @@ impl Kind
     {
         match atom
         {
-            Atom::Str(_) => Kind::String,
+            Atom::Str(_) => Kind::Char.referenced(),
+            Atom::Char(_) => Kind::Char,
             Atom::Int(_) => expected.filter(|kind| kind.is_int()).unwrap_or(Kind::I32),
             Atom::Float(_) => expected.filter(|kind| kind.is_float()).unwrap_or(Kind::F32),
             Atom::Bool(_) => Kind::Bool,
@@ -164,7 +166,7 @@ impl fmt::Display for Kind
             Kind::I64 => "i64",
             Kind::F32 => "f32",
             Kind::F64 => "f64",
-            Kind::String => "string",
+            Kind::Char => "char",
             Kind::None => "none",
             Kind::Bool => "bool",
             Kind::Ref(kind) => return write!(f, "&{kind}"),
@@ -189,12 +191,13 @@ pub fn binop_compat<'a>(op: &Binop, lhs: Kind, rhs: Kind, _env: &Env<'a, EnvEntr
             Some(lhs)
         }
         (Binop::Eq | Binop::Neq, lhs, rhs)
-            if lhs == rhs && (lhs.is_numeric() || lhs == Kind::Bool) =>
+            if lhs == rhs && (lhs.is_numeric() || matches!(lhs, Kind::Bool | Kind::Char)) =>
         {
             Some(Kind::Bool)
         }
+        // Chars are ordered by their codepoint
         (Binop::Lt | Binop::Gt | Binop::Lte | Binop::Gte, lhs, rhs)
-            if lhs == rhs && lhs.is_numeric() =>
+            if lhs == rhs && (lhs.is_numeric() || lhs == Kind::Char) =>
         {
             Some(Kind::Bool)
         }
@@ -220,5 +223,11 @@ pub fn unaop_compat<'a>(op: &Unaop, arg: Kind, _env: &Env<'a, EnvEntry>) -> Opti
 //HACK: Replace this function with a proper lut if things other than number become catsable in the future
 pub fn cast_compat(from: Kind, to: Kind) -> bool
 {
-    from == to || (from.is_numeric() && to.is_numeric())
+    // A char can only be converted from and to its codepoint, a u32 is converted to a char unchecked
+    from == to
+        || (from.is_numeric() && to.is_numeric())
+        || matches!(
+            (from, to),
+            (Kind::Char, Kind::U32) | (Kind::U32, Kind::Char)
+        )
 }

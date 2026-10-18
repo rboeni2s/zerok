@@ -59,6 +59,26 @@ impl<'a> GenEnv<'_, 'a>
         });
     }
 
+    /// `"abc"`, a string is a `[char]`
+    pub(super) fn generate_string(
+        &self,
+        expr: &ExprAst<'a>,
+        string: &str,
+        ir: &mut IrBuilder<EnvEntry, Kind>,
+    )
+    {
+        let (result_reg, result_kind) = (self.register_of(expr), kind_of(expr));
+        let chars = string.chars().collect::<Vec<_>>();
+
+        // Reserve space for the string
+        ir.alloc(result_reg, chars.len().to_ir_val(), result_kind);
+
+        for (index, c) in chars.into_iter().enumerate()
+        {
+            ir.write(result_reg, Kind::Char, c.to_ir_val(), index.to_ir_val());
+        }
+    }
+
     /// `[1, 2, 3]`
     pub(super) fn generate_vector_shorthand(
         &self,

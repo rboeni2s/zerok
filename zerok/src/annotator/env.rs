@@ -73,9 +73,11 @@ impl<'a, T> Default for Env<'a, T>
 {
     fn default() -> Self
     {
+        let builtins = [("ice_print", (Kind::None, vec![Kind::Char.referenced()]))];
+
         Self {
             bindings: Default::default(),
-            functions: Default::default(),
+            functions: Rc::new(RefCell::new(HashMap::from(builtins))),
             store: Default::default(),
             parent: None,
             ret: None,

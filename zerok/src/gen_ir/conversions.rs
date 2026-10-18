@@ -31,6 +31,15 @@ impl ToIrVal<EnvEntry> for bool
 }
 
 
+impl ToIrVal<EnvEntry> for char
+{
+    fn to_ir_val(self) -> EnvEntry
+    {
+        EnvEntry::Atom(Atom::Char(self))
+    }
+}
+
+
 impl ToIrReg<EnvEntry> for usize
 {
     fn to_ir_reg(self) -> EnvEntry
@@ -51,12 +60,9 @@ impl ToIIC for EnvEntry
             {
                 match atom
                 {
-                    Atom::Str(_) =>
-                    {
-                        todo!(
-                            "IIC string repräsentationen sind noch nicht implementiert, aber wahrscheinlich [char]"
-                        )
-                    }
+                    Atom::Str(_) => unreachable!("Strings are generated as a [char] on the heap"),
+                    // A char is its unicode codepoint
+                    Atom::Char(c) => u32::from(*c).to_string(),
                     Atom::Int(num) => num.to_string(),
                     Atom::Float(num) => (*num as u64).to_string(),
                     Atom::Bool(b) => u64::from(*b).to_string(),
