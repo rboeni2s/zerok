@@ -12,7 +12,7 @@ use crate::{
     reg_util::Reserved,
 };
 use iic_quote::iic_quote;
-use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg, ToIrReg};
+use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg};
 
 
 pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntry, Kind>>

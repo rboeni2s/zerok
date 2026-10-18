@@ -226,7 +226,6 @@ pub fn lexer<'src>()
 
     // A char is a single unicode codepoint
     let char = escape
-        .clone()
         .or(none_of("\\'\n"))
         .delimited_by(just('\''), just('\''))
         .map(Token::Char);

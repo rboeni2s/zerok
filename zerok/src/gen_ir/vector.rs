@@ -2,14 +2,10 @@ use super::{GenEnv, kind_of};
 use crate::{
     ExprAst,
     annotator::{EnvEntry, Kind},
-    parser::{
-        Type,
-        ops::{Binop, Unaop},
-    },
     reg_util::next_register,
 };
 use iic_quote::iic_quote;
-use ir::{IrBuilder, IrOp, ToIrVal};
+use ir::{IrBuilder, ToIrVal};
 
 
 impl<'a> GenEnv<'_, 'a>
@@ -24,7 +20,6 @@ impl<'a> GenEnv<'_, 'a>
     )
     {
         let length = self.generate_operand(length, ir);
-        // let default = self.generate_operand(default, ir);
 
         let (result_reg, result_kind) = (self.register_of(expr), kind_of(expr));
         let loop_start = &self.func.unique_label();
