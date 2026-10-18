@@ -12,7 +12,7 @@ use crate::{
     reg_util::Reserved,
 };
 use iic_quote::iic_quote;
-use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg};
+use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg, ToIrReg};
 
 
 pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntry, Kind>>
@@ -113,9 +113,35 @@ impl<'a> GenEnv<'_, 'a>
 
             Expr::Assign { target, source } =>
             {
-                self.generate_expr(target, ir);
-                let source = self.generate_operand(source, ir);
-                ir.bind(source, self.register_of(expr), kind_of(expr));
+                // Fallunterscheidung zwischen einem vector offset und einem register, da
+                // ich vector[index] zugriffe nicht als referenz zu einem element darstellen kann
+                match &target.inner
+                {
+                    Expr::Offset {
+                        target: vector,
+                        offset,
+                    } =>
+                    {
+                        self.generate_expr(vector, ir);
+                        let offset = self.generate_operand(offset, ir);
+                        let source = self.generate_operand(source, ir);
+
+                        ir.write(
+                            self.register_of(vector),
+                            kind_of(vector),
+                            source.clone(),
+                            offset,
+                        );
+                        ir.bind(source, self.register_of(expr), kind_of(expr));
+                    }
+
+                    _ =>
+                    {
+                        self.generate_expr(target, ir);
+                        let source = self.generate_operand(source, ir);
+                        ir.bind(source, self.register_of(expr), kind_of(expr));
+                    }
+                }
             }
 
             // The value of a reference is the first (and only) element of its heap allocation
@@ -157,11 +183,20 @@ impl<'a> GenEnv<'_, 'a>
             Expr::Break { .. } => self.generate_break(expr, ir),
             Expr::Continue { .. } => self.generate_continue(expr, ir),
 
-            Expr::NewVector {
-                length, default, ..
-            } => self.generate_new_vector(expr, length, default, ir),
+            Expr::NewVector { length, default } =>
+            {
+                self.generate_new_vector(expr, length, default, ir)
+            }
 
             Expr::VectorShorthand { items } => self.generate_vector_shorthand(expr, items, ir),
+
+            Expr::Offset { target, offset } =>
+            {
+                let (reg, kind) = (self.register_of(expr), kind_of(expr));
+                let target = self.generate_operand(target, ir);
+                let offset = self.generate_operand(offset, ir);
+                ir.read(reg, kind, target, offset);
+            }
 
             Expr::ParseError => unreachable!("The typechecker already denies parser errors"),
         }

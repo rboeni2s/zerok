@@ -10,13 +10,26 @@ op double(value: &u32, times: u32)
 }
 
 
-op main() -> u32
+op main() -> bool
 {
     sett mysterious_counter: &u32 = &1;
     double(mysterious_counter, 10); // 1024
 
-    sett array1: [bool] = &bool[10: nee];
-    sett array2: [bool] = &[ja, nee == ja, nee];
 
-    mysterious_counter
+    sett grid_a: [[u32]] = [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+    ];
+
+    sett grid_b: [[u32]] = [4: [4: 39]];
+
+    grid_a[2][2] = mysterious_counter;
+    grid_b[3][1] = mysterious_counter;
+
+    grid_a[2][2] == grid_b[3][1]
+        && grid_a[2][2] == mysterious_counter as u32
+        && grid_b[2][2] != mysterious_counter as u32
+        && 1024 == mysterious_counter as u32
 }

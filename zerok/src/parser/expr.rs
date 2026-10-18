@@ -96,7 +96,6 @@ pub enum Expr<'src, D>
 
     NewVector
     {
-        kind: Type<'src>,
         length: Box<Node<'src, D>>,
         default: Box<Node<'src, D>>,
     },
@@ -106,6 +105,7 @@ pub enum Expr<'src, D>
         items: Vec<Node<'src, D>>,
     },
 
+    /// A reference to the element at `offset` in the vector `target`, e.g. "a[1]"
     Offset
     {
         target: Box<Node<'src, D>>,
@@ -189,8 +189,8 @@ where
 
                 // Operands to operators can either be an atom or a (chained) expression
                 let operand = choice((
-                    Self::vector_parser(chain.clone()),
-                    Self::vector_shorthand_parser(chain.clone()),
+                    Self::vector_parser(term.clone()),
+                    Self::vector_shorthand_parser(term.clone()),
                     atom.clone(),
                     parenthesized,
                     decl,
@@ -231,6 +231,21 @@ where
                     infix(right(7), Binop::pow(), |lhs, op, rhs, info| {
                         Self::binop(op, lhs, rhs, info.span())
                     }),
+                    // "&a[1]" is "&(a[1])" and "a[1][2]" is "(a[1])[2]"
+                    postfix(
+                        8,
+                        term.clone()
+                            .delimited_by(just(Token::LBracket), just(Token::RBracket)),
+                        |target, offset, info| {
+                            AstNode::new(
+                                Self::Offset {
+                                    target: Box::new(target),
+                                    offset: Box::new(offset),
+                                },
+                                info.span(),
+                            )
+                        },
+                    ),
                     // "-a as u32" is "(-a) as u32" and "a * b as u32" is "a * (b as u32)"
                     postfix(
                         5,
@@ -248,14 +263,7 @@ where
                     // "!a == b" is "(!a) == b", "-a ** 2" is "-(a ** 2)" and "&a + b" is "(&a) + b"
                     prefix(
                         6,
-                        choice((
-                            Unaop::neg(),
-                            Unaop::bool_not(),
-                            // "&bool[10: nee]" is a vector declaration and not a reference to "bool", so don't treat
-                            // "&" as an operator if it is followed by a type and "["
-                            Unaop::reference()
-                                .then_ignore(Type::parser().then(just(Token::LBracket)).not()),
-                        )),
+                        choice((Unaop::neg(), Unaop::bool_not(), Unaop::reference())),
                         |op, val, info| Self::unaop(op, val, info.span()),
                     ),
                     // "&&" is lexed as one token, so "&&a" is a reference to a reference
@@ -343,41 +351,33 @@ where
 
     /// Parses a vector shorthand like `&[1, 2, 3]`
     pub fn vector_shorthand_parser<'t>(
-        expr: impl P<'t, 'src, Node<'src, D>>,
+        expr: impl P<'t, 'src, Node<'src, D>> + 't,
     ) -> impl P<'t, 'src, Node<'src, D>>
     where
         'src: 't,
     {
-        just(Token::Ref)
-            .ignore_then(
-                expr.separated_by(just(Token::Comma))
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .delimited_by(just(Token::LBracket), just(Token::RBracket)),
-            )
+        expr.separated_by(just(Token::Comma))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .delimited_by(just(Token::LBracket), just(Token::RBracket))
             .map_with(|items, info| AstNode::new(Expr::VectorShorthand { items }, info.span()))
     }
 
 
     /// Parses a vector declaration like `&kind[length: default]`
     pub fn vector_parser<'t>(
-        expr: impl P<'t, 'src, Node<'src, D>>,
-    ) -> impl P<'t, 'src, Node<'src, D>>
+        expr: impl P<'t, 'src, Node<'src, D>> + 't,
+    ) -> impl P<'t, 'src, Node<'src, D>> + 't
     where
         'src: 't,
     {
-        just(Token::Ref)
-            .ignore_then(Type::parser())
-            .then(
-                expr.clone()
-                    .then_ignore(just(Token::Doublecolon))
-                    .then(expr)
-                    .delimited_by(just(Token::LBracket), just(Token::RBracket)),
-            )
-            .map_with(|(kind, (length, default)), info| {
+        expr.clone()
+            .then_ignore(just(Token::Doublecolon))
+            .then(expr)
+            .delimited_by(just(Token::LBracket), just(Token::RBracket))
+            .map_with(|(length, default), info| {
                 AstNode::new(
                     Expr::NewVector {
-                        kind,
                         length: Box::new(length),
                         default: Box::new(default),
                     },

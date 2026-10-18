@@ -663,16 +663,21 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(target)
             }
 
-            Expr::NewVector {
-                kind,
-                length,
-                default,
-            } =>
+            Expr::NewVector { length, default } =>
             {
-                let Some(kind) = Kind::from_type(kind)
-                else
+                let kind = match expected
                 {
-                    return err!(span, "Unknown type \"{}\"", kind);
+                    Some(kind) =>
+                    {
+                        match kind
+                        {
+                            Kind::Ref(kind) => *kind,
+                            kind => kind,
+                        }
+                    }
+
+                    // If the expected type is not know, use the type of the default item
+                    None => default.annotate(env)?.kind,
                 };
 
                 length.annotate_as(env, Kind::U64, "The length of the vector")?;
@@ -720,6 +725,31 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 Ok(Annotation {
                     kind: kind.referenced(),
+                    cell: new_register(env),
+                    effect: Effect::None,
+                })
+            }
+
+            // Ich kann auf der ice maschiene keine referenz zu eínem einzelnen element auf dem heap haben...
+            // Also kann der index in einen vector immer nur eine kopie des elementsa zurück geben und nicht eine referenz zu dem element
+            Expr::Offset { target, offset } =>
+            {
+                let vector = target.annotate(&env.child_env())?.kind;
+
+                let Kind::Ref(&element) = vector
+                else
+                {
+                    return err!(
+                        span,
+                        "Can only index into a vector, but the target is of type {}",
+                        vector
+                    );
+                };
+
+                offset.annotate_as(&env.child_env(), Kind::U64, "The index into the vector")?;
+
+                Ok(Annotation {
+                    kind: element,
                     cell: new_register(env),
                     effect: Effect::None,
                 })

@@ -14,7 +14,7 @@ use ir::{IrBuilder, IrOp, ToIrVal};
 
 impl<'a> GenEnv<'_, 'a>
 {
-    /// `&type[length: default]`
+    /// `[length: default]`
     pub(super) fn generate_new_vector(
         &self,
         expr: &ExprAst<'a>,
@@ -24,7 +24,7 @@ impl<'a> GenEnv<'_, 'a>
     )
     {
         let length = self.generate_operand(length, ir);
-        let default = self.generate_operand(default, ir);
+        // let default = self.generate_operand(default, ir);
 
         let (result_reg, result_kind) = (self.register_of(expr), kind_of(expr));
         let loop_start = &self.func.unique_label();
@@ -32,19 +32,24 @@ impl<'a> GenEnv<'_, 'a>
         let index = next_register();
         let condition = next_register();
 
+
         ir.append(iic_quote! {
             // Reserve memory for the vector in result
             R(result_reg, result_kind) = <mk, length.clone()>;
 
-            // Now copy the default value into every index of the vector
+            // Now generate the default value into every index of the vector
             R(index, Kind::U32) = 0;
             loop_start:
                 // while index < length
                 R(condition, Kind::U32) = R(index) >= length;
                 if R(condition) goto loop_end;
+        });
 
+        let default_val = self.generate_operand(default, ir);
+
+        ir.append(iic_quote! {
                 // result[index] = default
-                R(result_reg, result_kind)<R(index)> = default;
+                R(result_reg, result_kind)<R(index)> = default_val;
 
                 // index++
                 R(index, Kind::U32) = R(index) + 1;
@@ -54,7 +59,7 @@ impl<'a> GenEnv<'_, 'a>
         });
     }
 
-    /// `&[1, 2, 3]`
+    /// `[1, 2, 3]`
     pub(super) fn generate_vector_shorthand(
         &self,
         expr: &ExprAst<'a>,
