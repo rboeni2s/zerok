@@ -161,6 +161,17 @@ fn calls()
     assert!(check_program("op main() { ice::print(\"abc\"); }").is_ok());
     assert!(check_program("op main() { ice_print(\"abc\"); }").is_err());
     assert!(check_program("op main() { ice::nope(); }").is_err());
+    assert!(check_program("op main() -> u64 { ice::len(\"abc\") }").is_ok());
+    assert!(check_program("op main() -> u32 { ice::len(\"abc\") }").is_err());
+
+    // ice::len takes every vector, the vector does not take the type of the parameter
+    assert!(check_program("op main() -> u64 { ice::len([1, 2]) }").is_ok());
+    assert!(check_program("op main() -> u64 { ice::len([3: ja]) }").is_ok());
+    assert!(check_program("op main() -> u64 { sett v: [[u32]] = [[1]]; ice::len(v) }").is_ok());
+    assert!(check_program("op main() -> u64 { ice::len(5) }").is_err());
+
+    // The type of its parameter can not be written in the source
+    assert!(check_program("op main() { sett x: &_ = \"a\"; }").is_err());
     assert!(
         check_program("op print(s: string) {} op main() { ice::print(\"abc\"); print(\"abc\"); }")
             .is_ok()

@@ -86,28 +86,45 @@ impl<'a, T> Default for Env<'a, T>
 {
     fn default() -> Self
     {
-        // Builtins are provided by the ice machine, so their ir name is fixed
-        let builtins = [(
-            Symbol {
-                module: vec!["ice"],
-                name: "print",
-            },
-            FunctionEntry {
-                ret: Kind::None,
-                params: vec![Kind::Char.referenced()],
-                ir_name: "ice_print".into(),
-            },
-        )];
-
         Self {
             bindings: Default::default(),
-            functions: Rc::new(RefCell::new(HashMap::from(builtins))),
+            functions: Rc::new(RefCell::new(builtins().collect())),
             store: Default::default(),
             parent: None,
             ret: None,
             loops: Default::default(),
         }
     }
+}
+
+
+/// The builtin functions of the module `ice`, they are provided by the ice machine,
+/// so their ir name is fixed
+fn builtins<'a>() -> impl Iterator<Item = (Symbol<'a>, FunctionEntry)>
+{
+    let string = Kind::Char.referenced();
+
+    // (name, parameters, return type)
+    let builtins = [
+        // Prints a string
+        ("print", vec![string], Kind::None),
+        // The length of a vector (or string)
+        ("len", vec![Kind::AnyRef], Kind::U64),
+    ];
+
+    builtins.into_iter().map(|(name, params, ret)| {
+        (
+            Symbol {
+                module: vec!["ice"],
+                name,
+            },
+            FunctionEntry {
+                ret,
+                params,
+                ir_name: format!("ice_{name}"),
+            },
+        )
+    })
 }
 
 

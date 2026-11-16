@@ -25,6 +25,20 @@ pub use env::{Env, EnvEntry, FunctionEntry};
 pub use kind::Kind;
 
 
+/// The type a node is expected to have, when it has to be of type `kind`.
+///
+/// Nothing is expected for an `AnyRef`, otherwise it would leak into the node,
+/// e.g. `[1, 2]` would become a vector of `AnyRef` instead of `i32`
+fn expectation_of(kind: Kind) -> Option<Kind>
+{
+    match kind
+    {
+        Kind::AnyRef => None,
+        kind => Some(kind),
+    }
+}
+
+
 /// Resolves the parsed symbol path.
 ///
 /// TODO: THIS FUNCTION IS A PLACEHOLDER
@@ -176,7 +190,7 @@ impl<'a> Node<'a, Option<Annotation>>
         what: impl fmt::Display,
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
-        let annotation = self.annotate_expecting(env, Some(kind))?;
+        let annotation = self.annotate_expecting(env, expectation_of(kind))?;
         self.expect_kind(env, annotation, kind, what)
     }
 
@@ -188,7 +202,7 @@ impl<'a> Node<'a, Option<Annotation>>
         what: impl fmt::Display,
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
-        let annotation = self.annotate_in_scope(env, Some(kind))?;
+        let annotation = self.annotate_in_scope(env, expectation_of(kind))?;
         self.expect_kind(env, annotation, kind, what)
     }
 
@@ -203,6 +217,12 @@ impl<'a> Node<'a, Option<Annotation>>
         what: impl fmt::Display,
     ) -> Result<Annotation, (SimpleSpan, String)>
     {
+        // Every reference is an AnyRef as it is, so it is not dereferenced
+        if kind == Kind::AnyRef && matches!(annotation.kind, Kind::Ref(_))
+        {
+            return Ok(annotation);
+        }
+
         // Only dereference if this leads to `kind`, so the error message shows the original type otherwise
         if annotation.kind.dereferences_to(kind)
         {

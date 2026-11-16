@@ -25,6 +25,12 @@ pub enum Kind
     None,
     Bool,
     Ref(&'static Self),
+
+    /// Compatible with every reference (and vector), regardless of what it points to.
+    ///
+    /// HACK: Only used for the parameters of builtins (like `ice::len`), until there are generics.
+    /// It can not be written in the source and no value ever has this type
+    AnyRef,
 }
 
 
@@ -170,6 +176,7 @@ impl fmt::Display for Kind
             Kind::None => "none",
             Kind::Bool => "bool",
             Kind::Ref(kind) => return write!(f, "&{kind}"),
+            Kind::AnyRef => "&_",
         };
 
         write!(f, "{name}")
