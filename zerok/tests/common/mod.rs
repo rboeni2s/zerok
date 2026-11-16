@@ -5,7 +5,7 @@
 
 pub use zerok::parser::atom::Atom;
 pub use zerok::parser::ops::{Binop, Unaop};
-pub use zerok::parser::{Expr, Function, Node, Param, Program, Type};
+pub use zerok::parser::{Expr, Function, Node, Param, Path, Program, Type};
 
 
 macro_rules! chain {
@@ -67,9 +67,17 @@ pub fn binding<'a, D: Default>(name: &'a str) -> Node<'a, D>
 }
 
 
-pub fn call<'a, D: Default>(name: &'a str, args: Vec<Node<'a, D>>) -> Node<'a, D>
+/// A call of `path`, modules are separated by `::`, e.g. `ice::print`
+pub fn call<'a, D: Default>(path: &'a str, args: Vec<Node<'a, D>>) -> Node<'a, D>
 {
-    Expr::Call { name, args }.into()
+    let mut module = path.split("::").collect::<Vec<_>>();
+    let name = module.pop().expect("split always yields at least one item");
+
+    Expr::Call {
+        path: Path { module, name },
+        args,
+    }
+    .into()
 }
 
 
@@ -85,13 +93,11 @@ pub fn function<'a, D: Default>(
         name,
         params: params
             .iter()
-            .map(|(name, kind)| {
-                Param {
-                    name,
-                    kind: kind.clone(),
-                    span: Default::default(),
-                    data: Default::default(),
-                }
+            .map(|(name, kind)| Param {
+                name,
+                kind: kind.clone(),
+                span: Default::default(),
+                data: Default::default(),
             })
             .collect(),
         ret,

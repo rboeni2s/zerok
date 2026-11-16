@@ -48,7 +48,8 @@ pub enum Token<'src>
     Ref,
     RefEq,
     Semicolon,
-    Doublecolon,
+    Colon,
+    PathSep,
     Arrow,
     EqEq,
     NotEq,
@@ -95,7 +96,8 @@ impl fmt::Display for Token<'_>
             Token::If => write!(f, "{KW_IF}"),
             Token::Else => write!(f, "{KW_ELSE}"),
             Token::Semicolon => write!(f, ";"),
-            Token::Doublecolon => write!(f, ":"),
+            Token::Colon => write!(f, ":"),
+            Token::PathSep => write!(f, "::"),
             Token::Arrow => write!(f, "->"),
             Token::EqEq => write!(f, "=="),
             Token::NotEq => write!(f, "!="),
@@ -258,23 +260,21 @@ pub fn lexer<'src>()
         .map(Token::Str);
 
     // Identifiers are lexed as a whole, so that keywords are only recognized if they are not a prefix of an identifier
-    let ident = text::ident().map(|ident| {
-        match ident
-        {
-            KW_DECL => Token::Decl,
-            KW_NOP => Token::Nop,
-            KW_AS => Token::As,
-            KW_FN => Token::Fn,
-            KW_RET => Token::Return,
-            KW_IF => Token::If,
-            KW_ELSE => Token::Else,
-            KW_TRUE => Token::Bool(true),
-            KW_FALSE => Token::Bool(false),
-            KW_BREAK => Token::Break,
-            KW_CONTINUE => Token::Continue,
-            KW_LOOP => Token::Loop,
-            _ => Token::Ident(ident),
-        }
+    let ident = text::ident().map(|ident| match ident
+    {
+        KW_DECL => Token::Decl,
+        KW_NOP => Token::Nop,
+        KW_AS => Token::As,
+        KW_FN => Token::Fn,
+        KW_RET => Token::Return,
+        KW_IF => Token::If,
+        KW_ELSE => Token::Else,
+        KW_TRUE => Token::Bool(true),
+        KW_FALSE => Token::Bool(false),
+        KW_BREAK => Token::Break,
+        KW_CONTINUE => Token::Continue,
+        KW_LOOP => Token::Loop,
+        _ => Token::Ident(ident),
     });
 
     // Multi character symbols have to be checked before the single character symbols they start with
@@ -284,6 +284,7 @@ pub fn lexer<'src>()
         just("&=").to(Token::RefEq),
         just("||").to(Token::BoolOr),
         just("->").to(Token::Arrow),
+        just("::").to(Token::PathSep),
         just("==").to(Token::EqEq),
         just("!=").to(Token::NotEq),
         just("<=").to(Token::Lte),
@@ -297,7 +298,7 @@ pub fn lexer<'src>()
         just("<").to(Token::Lt),
         just(">").to(Token::Gt),
         just(";").to(Token::Semicolon),
-        just(":").to(Token::Doublecolon),
+        just(":").to(Token::Colon),
         just("+").to(Token::Plus),
         just("-").to(Token::Minus),
         just("*").to(Token::Star),

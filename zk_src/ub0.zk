@@ -1,0 +1,12 @@
+op main() -> u32
+{
+    sett x: u32 = 0;
+    sett b: bool = nee;
+
+    wenn ja == b == ((x=1) == 1)
+    {
+        x = 2;
+    };
+
+    x
+}

@@ -3,6 +3,7 @@ pub mod atom;
 pub mod expr;
 pub mod lexer;
 pub mod ops;
+pub mod path;
 pub mod program;
 pub mod types;
 
@@ -13,6 +14,7 @@ use chumsky::input::MappedInput;
 use chumsky::prelude::*;
 pub use expr::Expr;
 pub use lexer::{Spanned, Token};
+pub use path::Path;
 pub use program::{Function, Param, Program};
 pub use types::Type;
 

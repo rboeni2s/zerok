@@ -1,4 +1,8 @@
-use super::{GenEnv, kind_of};
+use super::{
+    GenEnv,
+    kind_of,
+    labels::{LoopPart, loop_label},
+};
 use crate::{
     ExprAst,
     annotator::{Effect, EnvEntry, Kind},
@@ -23,7 +27,7 @@ impl<'a> GenEnv<'_, 'a>
             ir.bind(val, Reserved::Return.into(), self.return_kind());
         }
 
-        ir.jump(self.func.return_label());
+        ir.jump(self.return_label());
     }
 
 
@@ -70,8 +74,8 @@ impl<'a> GenEnv<'_, 'a>
         // IR builder für den körper der zweige
         let mut body_builder = IrBuilder::default();
 
-        let label_finished = &self.func.unique_label();
-        let label_else = &self.func.unique_label();
+        let label_finished = &self.unique_label();
+        let label_else = &self.unique_label();
 
         // Vereignigt den if kopf und körper mit denen der elifs,
         // zu einem iterator mit [(condition, body), (condition2, body2), ...]
@@ -80,7 +84,7 @@ impl<'a> GenEnv<'_, 'a>
 
         for (condition, body) in branches
         {
-            let label_body = &self.func.unique_label();
+            let label_body = &self.unique_label();
 
             let condition = self.generate_operand(condition, ir);
             ir.conditional_jump(condition, label_body);
@@ -127,12 +131,12 @@ impl<'a> GenEnv<'_, 'a>
         // fetch this loops label
         let label = name.expect("I am inside a loop or the typechecker broke");
 
-        // use the loops label instead of `func.unique_label()` for all of these,
+        // use the loops label instead of `unique_label()` for all of these,
         // even thought it is actually just needed for return and continue. This way all
         // the loops labels have a consistent naming scheme. (But ofc this does not matter for the start label...)
-        let start_label = &format!("start_{label}");
-        let continue_label = &format!("continue_{label}");
-        let done_label = &format!("done_{label}");
+        let start_label = &loop_label(label, LoopPart::Start);
+        let continue_label = &loop_label(label, LoopPart::Continue);
+        let done_label = &loop_label(label, LoopPart::Done);
 
         if let Some(head) = head
         {
@@ -158,7 +162,7 @@ impl<'a> GenEnv<'_, 'a>
             unreachable!("This break must have a break effect or the typechecker broke")
         };
 
-        ir.jump(format!("done_{label}"));
+        ir.jump(loop_label(label, LoopPart::Done));
     }
 
 
@@ -171,7 +175,7 @@ impl<'a> GenEnv<'_, 'a>
             unreachable!("This continue must have a continue effect or the typechecker broke")
         };
 
-        ir.jump(format!("continue_{label}"));
+        ir.jump(loop_label(label, LoopPart::Continue));
     }
 }
 

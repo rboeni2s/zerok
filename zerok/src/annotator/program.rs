@@ -1,7 +1,8 @@
-use super::{Annotation, Effect, Env, EnvEntry, Kind, new_register};
+use super::{Annotation, Effect, Env, EnvEntry, FunctionEntry, Kind, new_register};
 use crate::{
     parser::{Function, Program},
     reg_util,
+    symbol::Symbol,
 };
 use chumsky::span::SimpleSpan;
 use std::rc::Rc;
@@ -16,7 +17,14 @@ impl<'a> Program<'a, Option<Annotation>>
         {
             let (ret, params) = function.signature()?;
 
-            if env.put_function(function.name, ret, params).is_some()
+            let symbol = Symbol::root(function.name);
+            let entry = FunctionEntry {
+                ret,
+                params,
+                ir_name: symbol.mangled(),
+            };
+
+            if env.put_function(symbol, entry).is_some()
             {
                 return err!(
                     function.span,
@@ -66,27 +74,19 @@ impl<'a> Function<'a, Option<Annotation>>
         // A function without a return type does not return anything
         let ret = match &self.ret
         {
-            Some(ret) =>
-            {
-                Kind::from_type(ret)
-                    .ok_or_else(|| (self.span, format!("Unknown type \"{ret}\"")))?
-            }
+            Some(ret) => Kind::from_type(ret)
+                .ok_or_else(|| (self.span, format!("Unknown type \"{ret}\"")))?,
             None => Kind::None,
         };
 
         let params = self
             .params
             .iter()
-            .map(|param| {
-                match Kind::from_type(&param.kind)
-                {
-                    Some(Kind::None) =>
-                    {
-                        Err((param.span, "Parameters can not be of type none".into()))
-                    }
-                    Some(kind) => Ok(kind),
-                    None => Err((param.span, format!("Unknown type \"{}\"", param.kind))),
-                }
+            .map(|param| match Kind::from_type(&param.kind)
+            {
+                Some(Kind::None) => Err((param.span, "Parameters can not be of type none".into())),
+                Some(kind) => Ok(kind),
+                None => Err((param.span, format!("Unknown type \"{}\"", param.kind))),
             })
             .collect::<Result<_, _>>()?;
 
@@ -99,8 +99,8 @@ impl<'a> Function<'a, Option<Annotation>>
     {
         reg_util::reset_register();
 
-        let (ret, params) = env
-            .get_function(self.name)
+        let FunctionEntry { ret, params, .. } = env
+            .get_function(&Symbol::root(self.name))
             .expect("The signature of a function has to be collected before its body is annotated");
 
         // Every function has its own env, so it can only see its own parameters

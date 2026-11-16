@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use super::{Expr, Node, P, Token, Type};
 use chumsky::prelude::*;
 
@@ -29,25 +27,6 @@ pub struct Function<'src, D>
 
     pub body: Node<'src, D>,
     pub span: SimpleSpan,
-}
-
-
-impl<'src, D> Function<'src, D>
-{
-    pub fn unique_label(&self) -> String
-    {
-        static LABEL_NUMBER: AtomicUsize = AtomicUsize::new(0);
-        format!(
-            "{}_unq{}",
-            self.name,
-            LABEL_NUMBER.fetch_add(1, Ordering::Relaxed)
-        )
-    }
-
-    pub fn return_label(&self) -> String
-    {
-        format!("{}_return", self.name)
-    }
 }
 
 
@@ -93,15 +72,13 @@ where
         let ident = select! { Token::Ident(name) => name }.labelled("identifier");
 
         let param = ident
-            .then_ignore(just(Token::Doublecolon))
+            .then_ignore(just(Token::Colon))
             .then(Type::parser())
-            .map_with(|(name, kind), info| {
-                Param {
-                    name,
-                    kind,
-                    span: info.span(),
-                    data: D::default(),
-                }
+            .map_with(|(name, kind), info| Param {
+                name,
+                kind,
+                span: info.span(),
+                data: D::default(),
             });
 
         let params = param
@@ -119,14 +96,12 @@ where
             .then(params)
             .then(ret)
             .then(body)
-            .map_with(|(((name, params), ret), body), info| {
-                Function {
-                    name,
-                    params,
-                    ret,
-                    body,
-                    span: info.span(),
-                }
+            .map_with(|(((name, params), ret), body), info| Function {
+                name,
+                params,
+                ret,
+                body,
+                span: info.span(),
             });
 
         function

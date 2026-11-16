@@ -157,6 +157,15 @@ fn calls()
     // Unknown functions
     assert!(check_program("op main() { nope(); }").is_err());
 
+    // Builtins are in the module ice
+    assert!(check_program("op main() { ice::print(\"abc\"); }").is_ok());
+    assert!(check_program("op main() { ice_print(\"abc\"); }").is_err());
+    assert!(check_program("op main() { ice::nope(); }").is_err());
+    assert!(
+        check_program("op print(s: string) {} op main() { ice::print(\"abc\"); print(\"abc\"); }")
+            .is_ok()
+    );
+
     // A call to a function without a return type has no value
     assert!(check_program("op f() {} op main() -> i32 { f() + 1 }").is_err());
     assert!(check_program("op f() {} op main() { f() }").is_ok());

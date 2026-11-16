@@ -22,8 +22,8 @@ impl<'a> GenEnv<'_, 'a>
         let length = self.generate_operand(length, ir);
 
         let (result_reg, result_kind) = (self.register_of(expr), kind_of(expr));
-        let loop_start = &self.func.unique_label();
-        let loop_end = &self.func.unique_label();
+        let loop_start = &self.unique_label();
+        let loop_end = &self.unique_label();
         let index = next_register();
         let condition = next_register();
 

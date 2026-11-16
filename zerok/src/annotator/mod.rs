@@ -12,16 +12,29 @@ mod program;
 
 
 use crate::{
-    parser::{Expr, Node, ast::AstNode, atom::Atom, ops::Unaop},
+    parser::{Expr, Node, Path, ast::AstNode, atom::Atom, ops::Unaop},
     reg_util::new_register,
+    symbol::Symbol,
 };
 use chumsky::span::SimpleSpan;
 use kind::{binop_compat, cast_compat, unaop_compat};
 use std::{fmt, mem, rc::Rc};
 
 
-pub use env::{Env, EnvEntry};
+pub use env::{Env, EnvEntry, FunctionEntry};
 pub use kind::Kind;
+
+
+/// Resolves the parsed symbol path.
+///
+/// TODO: THIS FUNCTION IS A PLACEHOLDER
+pub fn resolve_path<'a>(path: &Path<'a>) -> Symbol<'a>
+{
+    Symbol {
+        module: path.module.clone(),
+        name: path.name,
+    }
+}
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,18 +105,15 @@ impl<'a> Node<'a, Option<Annotation>>
             Expr::Return { .. } => true,
 
             // A chain ending in ";" has a nop as its last element
-            Expr::Chain(ast_nodes) =>
+            Expr::Chain(ast_nodes) => match ast_nodes.as_slice()
             {
-                match ast_nodes.as_slice()
+                [.., last, nop] if matches!(nop.inner, Expr::Atom(Atom::Nop)) =>
                 {
-                    [.., last, nop] if matches!(nop.inner, Expr::Atom(Atom::Nop)) =>
-                    {
-                        last.ends_with_return()
-                    }
-                    [.., last] => last.ends_with_return(),
-                    [] => false,
+                    last.ends_with_return()
                 }
-            }
+                [.., last] => last.ends_with_return(),
+                [] => false,
+            },
 
             _ => false,
         }
@@ -269,14 +279,11 @@ impl<'a> Node<'a, Option<Annotation>>
                     Atom::Nop => Ok(Annotation::none(env)),
 
                     // A string is a "[char]", which is created on the heap like a vector shorthand, so it needs a register
-                    Atom::Str(_) =>
-                    {
-                        Ok(Annotation {
-                            kind: Kind::Char.referenced(),
-                            cell: new_register(env),
-                            effect: Effect::None,
-                        })
-                    }
+                    Atom::Str(_) => Ok(Annotation {
+                        kind: Kind::Char.referenced(),
+                        cell: new_register(env),
+                        effect: Effect::None,
+                    }),
 
                     atom =>
                     {
@@ -317,14 +324,11 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 match binop_compat(op, lhs, rhs, env)
                 {
-                    Some(ret) =>
-                    {
-                        Ok(Annotation {
-                            kind: ret,
-                            cell: new_register(env),
-                            effect: Effect::None,
-                        })
-                    }
+                    Some(ret) => Ok(Annotation {
+                        kind: ret,
+                        cell: new_register(env),
+                        effect: Effect::None,
+                    }),
                     None =>
                     {
                         err!(
@@ -352,14 +356,11 @@ impl<'a> Node<'a, Option<Annotation>>
 
                 match unaop_compat(op, val, env)
                 {
-                    Some(ret) =>
-                    {
-                        Ok(Annotation {
-                            kind: ret,
-                            cell: new_register(env),
-                            effect: Effect::None,
-                        })
-                    }
+                    Some(ret) => Ok(Annotation {
+                        kind: ret,
+                        cell: new_register(env),
+                        effect: Effect::None,
+                    }),
 
                     None => err!(span, "Cannot apply {:?} to argument of type {}", op, val),
                 }
@@ -446,9 +447,11 @@ impl<'a> Node<'a, Option<Annotation>>
             // A chain has its own scope, so its bindings are not visible after it
             Expr::Chain(ast_nodes) => Self::annotate_chain(ast_nodes, &env.child_env(), expected),
 
-            Expr::Call { name, args } =>
+            Expr::Call { path, args } =>
             {
-                let Some((ret, params)) = env.get_function(name)
+                let name = path.to_string();
+
+                let Some(FunctionEntry { ret, params, .. }) = env.get_function(&resolve_path(path))
                 else
                 {
                     return err!(span, "Unknown function {:?}", name);
@@ -574,13 +577,10 @@ impl<'a> Node<'a, Option<Annotation>>
                 let scope = env.child_env();
                 let annotation = match head
                 {
-                    Some(head) =>
-                    {
-                        Annotation {
-                            effect: Effect::None,
-                            ..head.annotate_in_scope(&scope, expected)?
-                        }
-                    }
+                    Some(head) => Annotation {
+                        effect: Effect::None,
+                        ..head.annotate_in_scope(&scope, expected)?
+                    },
                     None => Annotation::none(env),
                 };
 
@@ -593,55 +593,43 @@ impl<'a> Node<'a, Option<Annotation>>
                 Ok(annotation)
             }
 
-            Expr::Break { name } =>
+            Expr::Break { name } => match env.is_in_loop(*name)
             {
-                match env.is_in_loop(*name)
+                Some(label) => Ok(Annotation {
+                    effect: Effect::Break {
+                        label: label.into(),
+                    },
+                    ..Annotation::none(env)
+                }),
+
+                None =>
                 {
-                    Some(label) =>
-                    {
-                        Ok(Annotation {
-                            effect: Effect::Break {
-                                label: label.into(),
-                            },
-                            ..Annotation::none(env)
-                        })
-                    }
-
-                    None =>
-                    {
-                        err!(
-                            span,
-                            "Cannot break outside of a loop {}",
-                            name.unwrap_or_default()
-                        )
-                    }
+                    err!(
+                        span,
+                        "Cannot break outside of a loop {}",
+                        name.unwrap_or_default()
+                    )
                 }
-            }
+            },
 
-            Expr::Continue { name } =>
+            Expr::Continue { name } => match env.is_in_loop(*name)
             {
-                match env.is_in_loop(*name)
-                {
-                    Some(label) =>
-                    {
-                        Ok(Annotation {
-                            effect: Effect::Continue {
-                                label: label.into(),
-                            },
-                            ..Annotation::none(env)
-                        })
-                    }
+                Some(label) => Ok(Annotation {
+                    effect: Effect::Continue {
+                        label: label.into(),
+                    },
+                    ..Annotation::none(env)
+                }),
 
-                    None =>
-                    {
-                        err!(
-                            span,
-                            "Cannot continue outside of a loop {}",
-                            name.unwrap_or_default()
-                        )
-                    }
+                None =>
+                {
+                    err!(
+                        span,
+                        "Cannot continue outside of a loop {}",
+                        name.unwrap_or_default()
+                    )
                 }
-            }
+            },
 
             Expr::Assign { target, source } =>
             {
@@ -683,14 +671,11 @@ impl<'a> Node<'a, Option<Annotation>>
             {
                 let kind = match expected
                 {
-                    Some(kind) =>
+                    Some(kind) => match kind
                     {
-                        match kind
-                        {
-                            Kind::Ref(kind) => *kind,
-                            kind => kind,
-                        }
-                    }
+                        Kind::Ref(kind) => *kind,
+                        kind => kind,
+                    },
 
                     // If the expected type is not know, use the type of the default item
                     None => default.annotate(env)?.kind,
@@ -710,14 +695,11 @@ impl<'a> Node<'a, Option<Annotation>>
             {
                 let kind = match expected
                 {
-                    Some(kind) =>
+                    Some(kind) => match kind
                     {
-                        match kind
-                        {
-                            Kind::Ref(kind) => *kind,
-                            kind => kind,
-                        }
-                    }
+                        Kind::Ref(kind) => *kind,
+                        kind => kind,
+                    },
 
                     // If the expected type is not know, try and use the type if the first item
                     None =>

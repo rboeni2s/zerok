@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     annotator::{Annotation, Kind},
     parser::atom::Atom,
+    symbol::Symbol,
 };
 
 
@@ -56,11 +57,23 @@ pub enum EnvEntry
 }
 
 
+/// A function known to the environment
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionEntry
+{
+    pub ret: Kind,
+    pub params: Vec<Kind>,
+
+    /// The name of the function in the ir, e.g. `zk_add` or `ice_print` for builtins
+    pub ir_name: String,
+}
+
+
 pub struct Env<'a, T>
 {
     parent: Option<Rc<Self>>,
     bindings: RefCell<HashMap<&'a str, (Kind, usize)>>,
-    functions: Rc<RefCell<HashMap<&'a str, (Kind, Vec<Kind>)>>>,
+    functions: Rc<RefCell<HashMap<Symbol<'a>, FunctionEntry>>>,
     loops: Rc<RefCell<Vec<(String, String)>>>, // (Name, Label)
     store: Rc<Store<T>>,
 
@@ -73,7 +86,18 @@ impl<'a, T> Default for Env<'a, T>
 {
     fn default() -> Self
     {
-        let builtins = [("ice_print", (Kind::None, vec![Kind::Char.referenced()]))];
+        // Builtins are provided by the ice machine, so their ir name is fixed
+        let builtins = [(
+            Symbol {
+                module: vec!["ice"],
+                name: "print",
+            },
+            FunctionEntry {
+                ret: Kind::None,
+                params: vec![Kind::Char.referenced()],
+                ir_name: "ice_print".into(),
+            },
+        )];
 
         Self {
             bindings: Default::default(),
@@ -104,20 +128,16 @@ impl<'a, T> Env<'a, T>
     }
 
     /// Writes a function to the environment, if a function by that same name was already present it returns the old one
-    pub fn put_function(
-        &self,
-        name: &'a str,
-        ret: Kind,
-        args: Vec<Kind>,
-    ) -> Option<(Kind, Vec<Kind>)>
+    pub fn put_function(&self, symbol: Symbol<'a>, function: FunctionEntry)
+    -> Option<FunctionEntry>
     {
-        self.functions.borrow_mut().insert(name, (ret, args))
+        self.functions.borrow_mut().insert(symbol, function)
     }
 
-    /// Returns a functions argument and return types, if it exists
-    pub fn get_function(&self, name: &'a str) -> Option<(Kind, Vec<Kind>)>
+    /// Returns a function, if it exists
+    pub fn get_function(&self, symbol: &Symbol<'a>) -> Option<FunctionEntry>
     {
-        self.functions.borrow().get(name).cloned()
+        self.functions.borrow().get(symbol).cloned()
     }
 
     /// Gets the entry of `cell`, panics if it does not exist
@@ -176,14 +196,11 @@ impl<'a, T> Env<'a, T>
         match self.bindings.borrow().get(name).copied()
         {
             Some(binding) => Some(binding),
-            None =>
+            None => match &self.parent
             {
-                match &self.parent
-                {
-                    Some(parent) => parent.fetch_bound_cell(name),
-                    None => None,
-                }
-            }
+                Some(parent) => parent.fetch_bound_cell(name),
+                None => None,
+            },
         }
     }
 

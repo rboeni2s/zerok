@@ -1,5 +1,6 @@
 mod control;
 mod conversions;
+mod labels;
 mod ops;
 mod vector;
 
@@ -7,9 +8,10 @@ use crate::{
     Env,
     ExprAst,
     ProgAst,
-    annotator::{Annotation, EnvEntry, Kind},
+    annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
     reg_util::Reserved,
+    symbol::Symbol,
 };
 use iic_quote::iic_quote;
 use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg};
@@ -19,9 +21,16 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
 {
     let mut ir = IrBuilder::<EnvEntry, Kind>::default();
 
+    generate_entry_point(env, &mut ir);
+
     for func in &prog.functions
     {
-        GenEnv { env, func }.generate_func(&mut ir);
+        GenEnv {
+            env,
+            func,
+            symbol: Symbol::root(func.name),
+        }
+        .generate_func(&mut ir);
     }
 
     ir.build()
@@ -32,6 +41,27 @@ struct GenEnv<'g, 'a>
 {
     env: &'g Env<'a>,
     func: &'g Function<'a, Option<Annotation>>,
+
+    /// The fully qualified name of `func`
+    symbol: Symbol<'a>,
+}
+
+
+/// The ice machine starts at `main`, but the main function of zk is named `zk_main` in the ir.
+/// So the entry point `main` just calls it and returns its value
+fn generate_entry_point(env: &Env<'_>, ir: &mut IrBuilder<EnvEntry, Kind>)
+{
+    let Some(FunctionEntry { ret, ir_name, .. }) = env.get_function(&Symbol::root("main"))
+    else
+    {
+        unreachable!("The annotator makes sure, that there is a main function")
+    };
+
+    let result = Reserved::Return.into();
+
+    ir.func("main", &[])
+        .call(ir_name, &[], result, ret)
+        .ret(EnvEntry::Register(result));
 }
 
 
@@ -51,19 +81,16 @@ impl<'a> GenEnv<'_, 'a>
 
                 match self.env.get_unchecked(annotation.cell)
                 {
-                    EnvEntry::Register(reg) =>
-                    {
-                        IrTypedReg {
-                            reg: IrReg::R(reg),
-                            kind: annotation.kind,
-                        }
-                    }
+                    EnvEntry::Register(reg) => IrTypedReg {
+                        reg: IrReg::R(reg),
+                        kind: annotation.kind,
+                    },
                     EnvEntry::Atom(_) => unreachable!("Parameters are always stored in registers"),
                 }
             })
             .collect::<Vec<_>>();
 
-        ir.func(self.func.name, &params); // Genrate function head ir
+        ir.func(self.symbol.mangled(), &params); // Genrate function head ir
         self.generate_expr(&self.func.body, ir); // Generate function body ir
 
         // The value of the body is moved to the return register of the function.
@@ -75,7 +102,7 @@ impl<'a> GenEnv<'_, 'a>
         );
 
         // Returning is done jumping to this return label (with a return in zk) or reaching it naturally trough the function control flow
-        ir.label(self.func.return_label())
+        ir.label(self.return_label())
             // Maybe some side_effect or deinit code comes here
             .ret(EnvEntry::Register(Reserved::Return.into()));
     }
@@ -158,14 +185,23 @@ impl<'a> GenEnv<'_, 'a>
                 });
             }
 
-            Expr::Call { name, args } =>
+            Expr::Call { path, args } =>
             {
                 let args = args
                     .iter()
                     .map(|arg| self.generate_operand(arg, ir))
                     .collect::<Vec<_>>();
 
-                ir.call(*name, &args, self.register_of(expr), kind_of(expr));
+                // TODO: Once resolving depends on the scope (imports), the annotator should store
+                // the resolved symbol, instead of resolving the path a second time here
+                let Some(FunctionEntry { ir_name, .. }) =
+                    self.env.get_function(&resolve_path(path))
+                else
+                {
+                    unreachable!("The annotator makes sure, that {path} exists")
+                };
+
+                ir.call(ir_name, &args, self.register_of(expr), kind_of(expr));
             }
 
             Expr::Return { val } => self.generate_return(val.as_deref(), ir),
@@ -223,7 +259,7 @@ impl<'a> GenEnv<'_, 'a>
     /// The return type of the function ir is generated for
     fn return_kind(&self) -> Kind
     {
-        let Some((ret, _)) = self.env.get_function(self.func.name)
+        let Some(FunctionEntry { ret, .. }) = self.env.get_function(&self.symbol)
         else
         {
             unreachable!("This function must exists because it is already generating ir...")

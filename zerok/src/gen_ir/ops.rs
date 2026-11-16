@@ -110,8 +110,8 @@ impl<'a> GenEnv<'_, 'a>
         ir: &mut IrBuilder<EnvEntry, Kind>,
     )
     {
-        let loop_label = &self.func.unique_label();
-        let end_label = &self.func.unique_label();
+        let loop_label = &self.unique_label();
+        let end_label = &self.unique_label();
 
         let counter = reg_util::next_register();
         let done = reg_util::next_register();

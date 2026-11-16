@@ -4,7 +4,6 @@
 */
 
 
-/// Vertauscht die Elemente an den Stellen a und b
 op swap(values: [i32], a: u64, b: u64)
 {
     sett tmp: i32 = values[a];
@@ -13,8 +12,6 @@ op swap(values: [i32], a: u64, b: u64)
 }
 
 
-/// Teilt values[lo..=hi] am Pivot values[hi] auf und gibt die endgültige Position des Pivots zurück.
-/// Danach sind alle Elemente links vom Pivot kleiner und alle rechts größer oder gleich
 op partition(values: [i32], lo: i64, hi: i64) -> i64
 {
     sett pivot: i32 = values[hi as u64];
@@ -38,8 +35,6 @@ op partition(values: [i32], lo: i64, hi: i64) -> i64
 }
 
 
-/// Sortiert values[lo..=hi] aufsteigend.
-/// Die Grenzen sind i64, da hi bei p = 0 auf -1 fallen kann
 op quicksort_range(values: [i32], lo: i64, hi: i64)
 {
     wenn lo < hi
@@ -51,7 +46,6 @@ op quicksort_range(values: [i32], lo: i64, hi: i64)
 }
 
 
-/// Sortiert die ersten len Elemente von values aufsteigend
 op quicksort(values: [i32], len: u64)
 {
     quicksort_range(values, 0, len as i64 - 1);
@@ -105,13 +99,13 @@ op write_number(text: string, pos: u64, value: i32) -> u64
 }
 
 
-/// Formt die ersten len Elemente von values in einen String der Form "zahl, zahl, zahl" um
+/// Formt die Elemente von values in einen String der Form "zahl, zahl, zahl" um
 op join(values: [i32], len: u64) -> string
 {
     wenn len == 0 {geve ""};
 
-    // Zuerst wird die Länge des Strings bestimmt, denn Strings können nicht wachsen
-    sett length: u64 = 2 * (len - 1); // ", " zwischen allen Zahlen
+    // Länge des Strings bestimmen:
+    sett length: u64 = 2 * (len - 1); // Pro Zahl steht ",<space>" in der Ausgabe 
     sling sett i: u64 = 0
     {
         wenn i >= len {rut};
@@ -145,9 +139,12 @@ op main() -> u32
     sett values: [i32] = [39, -7, 1024, 0, 5, 42, -128, 5, 9, 1, 100, 3];
     sett len: u64 = 12;
 
-    ice_print(join(values, len));
+    ice::print("Vor dem Sortieren:");
+    ice::print(join(values, len));
+
+    ice::print("\nNach dem Sortieren:");
     quicksort(values, len);
-    ice_print(join(values, len));
+    ice::print(join(values, len));
 
     0
 }

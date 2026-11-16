@@ -178,6 +178,18 @@ fn calls()
     );
 
     assert!(parse("f(1; 2)").is_err());
+
+    // Functions of other modules are called by their path
+    assert_eq!(
+        parse("ice::print(a)").unwrap(),
+        chain![call("ice::print", vec![binding("a")])]
+    );
+    assert_eq!(parse("a::b::c()").unwrap(), chain![call("a::b::c", vec![])]);
+
+    // A path needs a name after every "::" and is only allowed for calls (for now)
+    assert!(parse("ice::(a)").is_err());
+    assert!(parse("::f()").is_err());
+    assert!(parse("ice::print").is_err());
 }
 
 

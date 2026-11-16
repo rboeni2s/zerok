@@ -2,7 +2,7 @@ use crate::parser::ast::AstNode;
 
 use super::atom::Atom;
 use super::ops::{Binop, Unaop};
-use super::{Node, P, Token, Type};
+use super::{Node, P, Path, Token, Type};
 use chumsky::pratt::*;
 use chumsky::prelude::*;
 
@@ -39,7 +39,7 @@ pub enum Expr<'src, D>
 
     Call
     {
-        name: &'src str,
+        path: Path<'src>,
         args: Vec<Node<'src, D>>,
     },
 
@@ -142,31 +142,27 @@ where
                 // Check if this expression is a declaration
                 let decl = just(Token::Decl)
                     .ignore_then(ident)
-                    .then_ignore(just(Token::Doublecolon))
+                    .then_ignore(just(Token::Colon))
                     .then(Type::parser())
                     .then_ignore(just(Token::Eq))
                     .then(term.clone())
-                    .map(|((name, kind), val)| {
-                        Self::Decl {
-                            name,
-                            kind,
-                            val: Box::new(val),
-                        }
+                    .map(|((name, kind), val)| Self::Decl {
+                        name,
+                        kind,
+                        val: Box::new(val),
                     })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expression is a return, the returned value is optional
                 let ret = just(Token::Return)
                     .ignore_then(term.clone().or_not())
-                    .map(|val| {
-                        Self::Return {
-                            val: val.map(Box::new),
-                        }
+                    .map(|val| Self::Return {
+                        val: val.map(Box::new),
                     })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expression is a function call, the arguments are separated by ","
-                let call = ident
+                let call = Path::parser()
                     .then(
                         term.clone()
                             .separated_by(just(Token::Comma))
@@ -174,7 +170,7 @@ where
                             .collect::<Vec<_>>()
                             .delimited_by(just(Token::LParen), just(Token::RParen)),
                     )
-                    .map(|(name, args)| Self::Call { name, args })
+                    .map(|(path, args)| Self::Call { path, args })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expression is a ident to a binding
@@ -324,20 +320,18 @@ where
         chain.define(
             expr_chain
                 .then(just(Token::Semicolon).or_not())
-                .map_with(|(mut chain, term), info| {
-                    match term
+                .map_with(|(mut chain, term), info| match term
+                {
+                    Some(_) =>
                     {
-                        Some(_) =>
+                        if let Self::Chain(chain) = &mut chain
                         {
-                            if let Self::Chain(chain) = &mut chain
-                            {
-                                chain.push(Expr::Atom(Atom::Nop).into());
-                            }
-
-                            AstNode::new(chain, info.span())
+                            chain.push(Expr::Atom(Atom::Nop).into());
                         }
-                        None => AstNode::new(chain, info.span()),
+
+                        AstNode::new(chain, info.span())
                     }
+                    None => AstNode::new(chain, info.span()),
                 })
                 // Try to skip malformed input in case of an error, so that the rest of the input can be checked
                 //TODO: This doesnt work, i should debug and fix this
@@ -372,7 +366,7 @@ where
         'src: 't,
     {
         expr.clone()
-            .then_ignore(just(Token::Doublecolon))
+            .then_ignore(just(Token::Colon))
             .then(expr)
             .delimited_by(just(Token::LBracket), just(Token::RBracket))
             .map_with(|(length, default), info| {
@@ -437,7 +431,7 @@ where
 
         let name = just(Token::Tick)
             .ignore_then(ident)
-            .then_ignore(just(Token::Doublecolon));
+            .then_ignore(just(Token::Colon));
 
         name.or_not()
             .then_ignore(just(Token::Loop))
