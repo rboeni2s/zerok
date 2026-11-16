@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     annotator::{Annotation, Kind},
     parser::atom::Atom,
+    reg_util::GbReserved,
     symbol::Symbol,
 };
 
@@ -52,8 +53,14 @@ pub enum EnvEntry
 {
     /// A literal, which is used directly as an operand and does not need a register
     Atom(Atom),
-
     Register(usize),
+
+    /// A global `G` register. The annotator never creates it, it is only used by the ir generation
+    Global(usize),
+
+    /// The address of a function or label, the ice machine resolves its name to its address.
+    /// The annotator never creates it, it is only used by the ir generation
+    Label(String),
 }
 
 
@@ -63,6 +70,7 @@ pub struct FunctionEntry
 {
     pub ret: Kind,
     pub params: Vec<Kind>,
+    pub rt_data_reg: usize,
 
     /// The name of the function in the ir, e.g. `zk_add` or `ice_print` for builtins
     pub ir_name: String,
@@ -122,6 +130,7 @@ fn builtins<'a>() -> impl Iterator<Item = (Symbol<'a>, FunctionEntry)>
                 ret,
                 params,
                 ir_name: format!("ice_{name}"),
+                rt_data_reg: GbReserved::Extern as usize,
             },
         )
     })

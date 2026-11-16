@@ -31,6 +31,9 @@ pub enum Kind
     /// HACK: Only used for the parameters of builtins (like `ice::len`), until there are generics.
     /// It can not be written in the source and no value ever has this type
     AnyRef,
+
+    /// Placeholder for internally defined types, like for example the runtime data vector of a function
+    Intern,
 }
 
 
@@ -177,6 +180,7 @@ impl fmt::Display for Kind
             Kind::Bool => "bool",
             Kind::Ref(kind) => return write!(f, "&{kind}"),
             Kind::AnyRef => "&_",
+            Kind::Intern => "intern",
         };
 
         write!(f, "{name}")

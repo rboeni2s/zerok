@@ -2,7 +2,7 @@ use crate::{
     annotator::{EnvEntry, Kind},
     parser::atom::Atom,
 };
-use ir::{ToIIC, ToIrReg, ToIrVal};
+use ir::{ToIIC, ToIrGlobal, ToIrReg, ToIrVal};
 
 
 macro_rules! impl_to_ir_val_for_T {
@@ -49,6 +49,15 @@ impl ToIrReg<EnvEntry> for usize
 }
 
 
+impl ToIrGlobal<EnvEntry> for usize
+{
+    fn to_ir_global(self) -> EnvEntry
+    {
+        EnvEntry::Global(self)
+    }
+}
+
+
 impl ToIIC for EnvEntry
 {
     fn to_iic(&self) -> String
@@ -56,6 +65,8 @@ impl ToIIC for EnvEntry
         match self
         {
             EnvEntry::Register(reg) => format!("R{reg}"),
+            EnvEntry::Global(reg) => format!("G{reg}"),
+            EnvEntry::Label(name) => name.clone(),
             EnvEntry::Atom(atom) =>
             {
                 match atom

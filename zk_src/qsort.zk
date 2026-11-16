@@ -46,9 +46,9 @@ op quicksort_range(values: [i32], lo: i64, hi: i64)
 }
 
 
-op quicksort(values: [i32], len: u64)
+op quicksort(values: [i32])
 {
-    quicksort_range(values, 0, len as i64 - 1);
+    quicksort_range(values, 0, ice::len(values) as i64 - 1);
 }
 
 
@@ -100,8 +100,10 @@ op write_number(text: string, pos: u64, value: i32) -> u64
 
 
 /// Formt die Elemente von values in einen String der Form "zahl, zahl, zahl" um
-op join(values: [i32], len: u64) -> string
+op join(values: [i32]) -> string
 {
+    sett len: u64 = ice::len(values);
+    
     wenn len == 0 {geve ""};
 
     // Länge des Strings bestimmen:
@@ -140,11 +142,11 @@ op main() -> u32
     sett len: u64 = 12;
 
     ice::print("Vor dem Sortieren:");
-    ice::print(join(values, len));
+    ice::print(join(values));
 
     ice::print("\nNach dem Sortieren:");
-    quicksort(values, len);
-    ice::print(join(values, len));
+    quicksort(values);
+    ice::print(join(values));
 
     0
 }

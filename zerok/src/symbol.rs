@@ -27,13 +27,13 @@ impl<'a> Symbol<'a>
         }
     }
 
-    /// The path of the symbol without any prefix. Every module is prefixed with its length:
+    /// Mangled symbolname without prefix. Every module is prefixed with its length:
+    /// numbers are used to seperate module names because identifiers cannot start with a digit...
     ///
+    /// Bsp:
     /// * `add`            -> `add`
     /// * `math::add`      -> `4math_add`
     /// * `math::vec::add` -> `4math3vec_add`
-    ///
-    /// This is unambiguous, because identifiers can not start with a digit
     pub fn mangled_path(&self) -> String
     {
         let mut mangled = String::new();

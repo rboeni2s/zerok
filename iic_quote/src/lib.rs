@@ -182,6 +182,7 @@ impl Parse for IicOp
 enum IicVal
 {
     Reg(syn::Expr),
+    Global(syn::Expr),
     Val(syn::Expr),
 }
 
@@ -293,7 +294,7 @@ fn parse_expr_until(
 }
 
 
-/// Like `parse_expr_until`, but recognizes a lone `R(expr)` as a register
+/// Like `parse_expr_until`, but recognizes a lone `R(expr)` or `G(expr)` as a register
 fn parse_val_until(
     input: ParseStream,
     stop: impl Fn(ParseStream) -> bool,
@@ -303,12 +304,18 @@ fn parse_val_until(
     let tokens = collect_until(input, stop, what)?;
     let mut iter = tokens.clone().into_iter();
 
+    // Registers are read with R(expr) or G(expr)
     if let (Some(TokenTree::Ident(ident)), Some(TokenTree::Group(group)), None) =
         (iter.next(), iter.next(), iter.next())
-        && (ident == "R" || ident == "r")
         && group.delimiter() == Delimiter::Parenthesis
     {
-        return Ok(IicVal::Reg(syn::parse2(group.stream())?));
+        match ident.to_string().as_str()
+        {
+            "R" | "r" => return Ok(IicVal::Reg(syn::parse2(group.stream())?)),
+            "G" | "g" => return Ok(IicVal::Global(syn::parse2(group.stream())?)),
+            _ =>
+            {}
+        }
     }
 
     Ok(IicVal::Val(syn::parse2(tokens)?))
@@ -674,6 +681,7 @@ impl ToTokens for IicVal
         tokens.extend(match self
         {
             IicVal::Reg(reg) => quote!(::ir::ToIrReg::to_ir_reg(#reg)),
+            IicVal::Global(reg) => quote!(::ir::ToIrGlobal::to_ir_global(#reg)),
             IicVal::Val(val) => quote!(::ir::ToIrVal::to_ir_val(#val)),
         });
     }

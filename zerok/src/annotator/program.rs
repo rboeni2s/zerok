@@ -22,6 +22,7 @@ impl<'a> Program<'a, Option<Annotation>>
                 ret,
                 params,
                 ir_name: symbol.mangled(),
+                rt_data_reg: reg_util::next_global_register(),
             };
 
             if env.put_function(symbol, entry).is_some()
@@ -97,7 +98,8 @@ impl<'a> Function<'a, Option<Annotation>>
     /// The signature has to be in `env` already, if it does not then thats a programmer error
     fn annotate(&mut self, env: &Rc<Env<'a, EnvEntry>>) -> Result<(), (SimpleSpan, String)>
     {
-        reg_util::reset_register();
+        // HACK: DO NOT RESET registers: Eigentlich sollte das echt keine probleme machen. tut es aber.. WARUM???
+        // reg_util::reset_register();
 
         let FunctionEntry { ret, params, .. } = env
             .get_function(&Symbol::root(self.name))

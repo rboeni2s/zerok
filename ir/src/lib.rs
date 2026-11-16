@@ -23,9 +23,17 @@ impl<T> ToIrVal<T> for T
 }
 
 
+/// Converts to an operand, that reads the (function local) `R` register `self`
 pub trait ToIrReg<T>
 {
     fn to_ir_reg(self) -> T;
+}
+
+
+/// Converts to an operand, that reads the global `G` register `self`
+pub trait ToIrGlobal<T>
+{
+    fn to_ir_global(self) -> T;
 }
 
 

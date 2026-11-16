@@ -10,7 +10,7 @@ use crate::{
     ProgAst,
     annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
-    reg_util::Reserved,
+    reg_util::{self, FnReserved, GbReserved},
     symbol::Symbol,
 };
 use iic_quote::iic_quote;
@@ -20,18 +20,41 @@ use ir::{IrBuilder, IrChunk, IrReg, IrTypedReg};
 pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntry, Kind>>
 {
     let mut ir = IrBuilder::<EnvEntry, Kind>::default();
+    let mut prelude = IrBuilder::<EnvEntry, Kind>::default();
 
-    generate_entry_point(env, &mut ir);
 
     for func in &prog.functions
     {
-        GenEnv {
-            env,
-            func,
-            symbol: Symbol::root(func.name),
-        }
-        .generate_func(&mut ir);
+        //HACK: Get the symbol of the function, this needs to be supplied by the annotator once the module system is fully implemented
+        let symbol = Symbol::root(func.name);
+
+        // Get the function data from the env
+        let Some(FunctionEntry {
+            rt_data_reg,
+            ir_name,
+            ..
+        }) = env.get_function(&symbol)
+        else
+        {
+            unreachable!("The annotator has put every function into the env")
+        };
+
+        // runtime data of the function: [address, flags, captures]
+        let rt_data = Kind::Intern.referenced();
+
+        prelude.append(iic_quote! {
+            G(rt_data_reg, rt_data) = <mk, 3>;
+            // Write the function address
+            G(rt_data_reg, rt_data)<0> = EnvEntry::Label(ir_name);
+            // No flags and captures for now
+            G(rt_data_reg, rt_data)<1> = 0;
+            G(rt_data_reg, rt_data)<2> = 0;
+        });
+
+        GenEnv { env, func, symbol }.generate_func(&mut ir);
     }
+
+    generate_entry_point(env, &mut ir, prelude);
 
     ir.build()
 }
@@ -49,7 +72,11 @@ struct GenEnv<'g, 'a>
 
 /// The ice machine starts at `main`, but the main function of zk is named `zk_main` in the ir.
 /// So the entry point `main` just calls it and returns its value
-fn generate_entry_point(env: &Env<'_>, ir: &mut IrBuilder<EnvEntry, Kind>)
+fn generate_entry_point(
+    env: &Env<'_>,
+    ir: &mut IrBuilder<EnvEntry, Kind>,
+    prelude: IrBuilder<EnvEntry, Kind>,
+)
 {
     let Some(FunctionEntry { ret, ir_name, .. }) = env.get_function(&Symbol::root("main"))
     else
@@ -57,9 +84,10 @@ fn generate_entry_point(env: &Env<'_>, ir: &mut IrBuilder<EnvEntry, Kind>)
         unreachable!("The annotator makes sure, that there is a main function")
     };
 
-    let result = Reserved::Return.into();
+    let result = FnReserved::Return.into();
 
     ir.func("main", &[])
+        .append(prelude.build())
         .call(ir_name, &[], result, ret)
         .ret(EnvEntry::Register(result));
 }
@@ -85,7 +113,10 @@ impl<'a> GenEnv<'_, 'a>
                         reg: IrReg::R(reg),
                         kind: annotation.kind,
                     },
-                    EnvEntry::Atom(_) => unreachable!("Parameters are always stored in registers"),
+                    EnvEntry::Atom(_) | EnvEntry::Global(_) | EnvEntry::Label(_) =>
+                    {
+                        unreachable!("Parameters are always stored in R registers")
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -97,14 +128,14 @@ impl<'a> GenEnv<'_, 'a>
         // Functions without a return value return a register of type none, which can be optimized away
         ir.bind(
             self.entry_of(&self.func.body),
-            Reserved::Return.into(),
+            FnReserved::Return.into(),
             self.return_kind(),
         );
 
         // Returning is done jumping to this return label (with a return in zk) or reaching it naturally trough the function control flow
         ir.label(self.return_label())
             // Maybe some side_effect or deinit code comes here
-            .ret(EnvEntry::Register(Reserved::Return.into()));
+            .ret(EnvEntry::Register(FnReserved::Return.into()));
     }
 
 
@@ -194,14 +225,37 @@ impl<'a> GenEnv<'_, 'a>
 
                 // TODO: Once resolving depends on the scope (imports), the annotator should store
                 // the resolved symbol, instead of resolving the path a second time here
-                let Some(FunctionEntry { ir_name, .. }) =
-                    self.env.get_function(&resolve_path(path))
+                let Some(FunctionEntry {
+                    ir_name,
+                    rt_data_reg,
+                    ..
+                }) = self.env.get_function(&resolve_path(path))
                 else
                 {
                     unreachable!("The annotator makes sure, that {path} exists")
                 };
 
-                ir.call(ir_name, &args, self.register_of(expr), kind_of(expr));
+                // If this function is extern, call it without rt_data
+                if rt_data_reg == GbReserved::Extern as usize
+                {
+                    ir.call(ir_name, &args, self.register_of(expr), kind_of(expr));
+                }
+                // If its not extern, try and call it with rt_data
+                else
+                {
+                    let fn_addr = reg_util::next_register();
+                    let fn_name = format!("R{fn_addr}");
+
+                    ir.append(iic_quote! {
+                        R(fn_addr, Kind::Intern) = G(rt_data_reg)<0>;
+                    })
+                    .call(
+                        fn_name,
+                        &args,
+                        self.register_of(expr),
+                        kind_of(expr),
+                    );
+                }
             }
 
             Expr::Return { val } => self.generate_return(val.as_deref(), ir),
@@ -276,6 +330,8 @@ impl<'a> GenEnv<'_, 'a>
         {
             EnvEntry::Register(reg) => reg,
             EnvEntry::Atom(atom) => panic!("The literal {atom} does not have a register"),
+            EnvEntry::Global(reg) => panic!("G{reg} is not a register of the function"),
+            EnvEntry::Label(name) => panic!("The address of {name} does not have a register"),
         }
     }
 }

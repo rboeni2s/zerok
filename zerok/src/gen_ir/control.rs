@@ -6,7 +6,7 @@ use super::{
 use crate::{
     ExprAst,
     annotator::{Effect, EnvEntry, Kind},
-    reg_util::Reserved,
+    reg_util::FnReserved,
 };
 use iic_quote::iic_quote;
 use ir::IrBuilder;
@@ -24,7 +24,7 @@ impl<'a> GenEnv<'_, 'a>
         if let Some(val) = val
         {
             let val = self.generate_operand(val, ir);
-            ir.bind(val, Reserved::Return.into(), self.return_kind());
+            ir.bind(val, FnReserved::Return.into(), self.return_kind());
         }
 
         ir.jump(self.return_label());
