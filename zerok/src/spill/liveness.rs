@@ -14,18 +14,28 @@ use crate::{
 ///
 /// `Self::live_in[n]` holds a vector if registers that are live directly before the instruction`n`
 /// `Self::live_out[n]` holds a vector if registers that are live directly after the instruction `n`
+///
+/// The analysed instructions are kept as a reference, so later passes (like building the
+/// interference graph) always work on the same instructions the liveness was computed for.
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct Liveness
+pub struct Liveness<'a>
 {
+    chunks: &'a [IrChunk<EnvEntry, Kind>],
     pub live_in: Vec<BTreeSet<RegNum>>,
     pub live_out: Vec<BTreeSet<RegNum>>,
 }
 
 
-impl Liveness
+impl<'a> Liveness<'a>
 {
+    /// The instructions this liveness was computed for, indexed like `live_in` and `live_out`
+    pub fn chunks(&self) -> &'a [IrChunk<EnvEntry, Kind>]
+    {
+        self.chunks
+    }
+
     /// Computes the liveness of all registers of `chunks`
-    pub fn new(chunks: &[IrChunk<EnvEntry, Kind>]) -> Self
+    pub fn new(chunks: &'a [IrChunk<EnvEntry, Kind>]) -> Self
     {
         // Listet alle nachfolger einer instruction auf
         let succ = cfg_successors(chunks);
@@ -78,6 +88,10 @@ impl Liveness
             }
         }
 
-        Self { live_in, live_out }
+        Self {
+            chunks,
+            live_in,
+            live_out,
+        }
     }
 }

@@ -10,4 +10,5 @@ pub type RegNum = usize;
 pub type CmdIdx = usize;
 
 
+pub use intf_graph::{IntfEdge, IntfGraph, build_interference_graph, neighbours};
 pub use liveness::Liveness;
