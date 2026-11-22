@@ -4,7 +4,7 @@ use ir::{IrChunk, IrOp, IrReg, IrTypedReg};
 use std::collections::{BTreeSet, HashMap};
 use zerok::annotator::{EnvEntry, Kind};
 use zerok::parser::atom::Atom;
-use zerok::spill::cfg::{CfgRegs, cfg_successors};
+use zerok::spill::cfg::{CfgRegs, cfg_successors, split_functions};
 use zerok::spill::intf_graph::register_classes;
 use zerok::spill::{
     FloatNode,
@@ -455,4 +455,54 @@ fn interference_node_color()
 
     // Der knotentyp muss zur klasse passen
     assert!(graph.get::<FloatNode>(1).is_none());
+}
+
+
+#[test]
+fn split_functions_at_func()
+{
+    let chunks = vec![
+        IrChunk::Func { name: "f".into(), args: vec![tr(256)] },
+        IrChunk::Ret { val: r(256) },
+        IrChunk::Func { name: "g".into(), args: vec![trk(256, Kind::F64)] },
+        IrChunk::Bin { op: IrOp::Mul, lhs: r(256), rhs: r(256), reg: trk(257, Kind::F64) },
+        IrChunk::Ret { val: r(257) },
+    ];
+
+    let funcs: Vec<_> = split_functions(&chunks).collect();
+
+    assert_eq!(funcs.len(), 2);
+    assert_eq!(funcs[0], &chunks[0..2]);
+    assert_eq!(funcs[1], &chunks[2..5]);
+
+    // R256 ist in f ein int, in g ein float: pro funktion analysiert gibt es keinen konflikt
+    let f = build_interference_graph(&Liveness::new(funcs[0]));
+    let g = build_interference_graph(&Liveness::new(funcs[1]));
+    assert_eq!(nodes::<IntNode>(&f), BTreeSet::from([256]));
+    assert_eq!(nodes::<FloatNode>(&g), BTreeSet::from([256, 257]));
+}
+
+
+/// Wie `wenn i > 0 { pos = pos + 2; }` im qsort beispiel: der körper hat den wert none,
+/// sein wertregister R3 wird nie geschrieben, aber in das ergebnisregister R4 gebunden
+#[test]
+fn interference_ignores_none_registers()
+{
+    let chunks = vec![
+        IrChunk::Func { name: "f".into(), args: vec![tr(1)] },
+        IrChunk::Bin { op: IrOp::Add, lhs: r(1), rhs: EnvEntry::Atom(Atom::Int(2)), reg: tr(2) },
+        IrChunk::Bind { val: r(3), reg: trk(4, Kind::None) },
+        IrChunk::Ret { val: r(2) },
+    ];
+
+    let classes = register_classes(&chunks);
+    assert_eq!(classes.get(&3), None);
+    assert_eq!(classes.get(&4), None);
+
+    let graph = graph_of(&chunks);
+
+    // Nur R1 und R2 brauchen ein register
+    assert_eq!(nodes::<IntNode>(&graph), BTreeSet::from([1, 2]));
+    assert!(graph.get_entry(3).is_none());
+    assert!(graph.get_entry(4).is_none());
 }

@@ -6,9 +6,7 @@ use cache_map::ident::IdentRef;
 use cache_map::prelude::*;
 
 
-/// The register class of a value. Registers of different classes live in different register files
-/// (e.g. general purpose and `xmm` registers on x86-64), so they never interfere with each other
-/// and are colored independently, each with its own number of machine registers.
+/// The register class of a value.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RegClass
 {
@@ -19,12 +17,15 @@ pub enum RegClass
 
 impl RegClass
 {
-    pub fn of(kind: Kind) -> Self
+    /// The class of a value of `kind`, or `None` for `Kind::None`: a none value carries no data
+    /// and therefore needs no machine register.
+    pub fn of(kind: Kind) -> Option<Self>
     {
         match kind
         {
-            Kind::F32 | Kind::F64 => Self::Float,
-            _ => Self::Int,
+            Kind::None => None,
+            Kind::F32 | Kind::F64 => Some(Self::Float),
+            _ => Some(Self::Int),
         }
     }
 }

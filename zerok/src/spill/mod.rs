@@ -25,4 +25,5 @@ pub use intf_graph::{
     build_interference_graph,
     neighbours,
 };
+pub use cfg::split_functions;
 pub use liveness::Liveness;

@@ -95,6 +95,20 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
 }
 
 
+/// Splits the ir of a whole program into the ir of its functions, each starting with its `Func`.
+///
+/// The liveness analysis and everything after it work on a single function, because register
+/// numbers restart in every function and the same number in two functions means two different
+/// registers.
+pub fn split_functions(
+    chunks: &[IrChunk<EnvEntry, Kind>],
+) -> impl Iterator<Item = &[IrChunk<EnvEntry, Kind>]>
+{
+    // Eine neue gruppe beginnt bei jedem `Func`
+    chunks.chunk_by(|_, next| !matches!(next, IrChunk::Func { .. }))
+}
+
+
 /// Returns a list of successors for each IrChunk
 pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
 {
