@@ -1,5 +1,6 @@
 // Einfach 5
-op main()
+op main() -> u32
 {
-    5;
+    sett five: u32 = 5;
+    5 + five
 }

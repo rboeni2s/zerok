@@ -1,64 +1,30 @@
+use crate::{
+    annotator::{EnvEntry, Kind},
+    spill::{
+        CmdIdx,
+        RegNum,
+        reg_helper::{GetRegR, operands},
+    },
+};
+use ir::IrChunk;
 use std::collections::HashMap;
-
-use crate::annotator::{EnvEntry, Kind};
-use ir::{IrChunk, IrReg, IrTypedReg};
 
 
 /// Register used by a IR-instruction
 pub trait CfgRegs
 {
     /// Returns a vector of all local registers being read by this instruction
-    fn cfg_use(&self) -> Vec<usize>;
+    fn cfg_use(&self) -> Vec<RegNum>;
 
     /// Returns a vector of all local registers being written to by this instruction
-    fn cfg_def(&self) -> Vec<usize>;
-}
-
-
-/// Extracts the R register number from a value (like `EnvEntry` or `IrTypedReg`)
-trait GetRegR
-{
-    fn get_r_reg_of(&self) -> Option<usize>;
-}
-
-
-impl GetRegR for EnvEntry
-{
-    fn get_r_reg_of(&self) -> Option<usize>
-    {
-        match self
-        {
-            EnvEntry::Register(reg) => Some(*reg),
-            EnvEntry::Atom(_) => None,
-        }
-    }
-}
-
-
-impl GetRegR for IrTypedReg<Kind>
-{
-    fn get_r_reg_of(&self) -> Option<usize>
-    {
-        match self.reg
-        {
-            IrReg::R(reg) => Some(reg),
-            IrReg::G(_) => None,
-        }
-    }
-}
-
-
-fn operands<'a, G: GetRegR + 'a>(vals: impl IntoIterator<Item = &'a G>) -> Vec<usize>
-{
-    vals.into_iter()
-        .filter_map(|item| item.get_r_reg_of())
-        .collect()
+    fn cfg_def(&self) -> Vec<RegNum>;
 }
 
 
 impl CfgRegs for IrChunk<EnvEntry, Kind>
 {
-    fn cfg_use(&self) -> Vec<usize>
+    /// Returns a Vec of all R register numbers read by this instruction
+    fn cfg_use(&self) -> Vec<RegNum>
     {
         match self
         {
@@ -70,7 +36,6 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
             IrChunk::CondJump { val, .. } => operands([val]),
             IrChunk::MemAlloc { size, .. } => operands([size]),
 
-            // `base` is an `IrTypedReg`, but it is only read: the write goes to memory
             IrChunk::MemWrite {
                 value,
                 base,
@@ -83,24 +48,23 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
             }
 
             IrChunk::MemRead { base, offset, .. } => operands([base, offset]),
-
             IrChunk::Func { .. } | IrChunk::Label { .. } | IrChunk::Jump { .. } => Vec::new(),
         }
     }
 
-    fn cfg_def(&self) -> Vec<usize>
+    /// Returns a Vec of all R Register numbers written by this instruction
+    fn cfg_def(&self) -> Vec<RegNum>
     {
         match self
         {
+            IrChunk::Func { args, .. } => args.iter().filter_map(|r| r.get_r_reg_of()).collect(),
+
             IrChunk::Bin { reg, .. }
             | IrChunk::Una { reg, .. }
             | IrChunk::Bind { reg, .. }
             | IrChunk::Call { reg, .. }
             | IrChunk::MemAlloc { reg, .. }
             | IrChunk::MemRead { reg, .. } => reg.get_r_reg_of().into_iter().collect(),
-
-            // Parameters are defined on function entry
-            IrChunk::Func { args, .. } => args.iter().filter_map(|r| r.get_r_reg_of()).collect(),
 
             IrChunk::Ret { .. }
             | IrChunk::Label { .. }
@@ -113,7 +77,7 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
 
 
 /// Returns a list of successors for each IrChunk
-fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<usize>>
+pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
 {
     // instruction indexe von den labels
     let labels = chunks
@@ -126,12 +90,12 @@ fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<usize>>
                 _ => None,
             }
         })
-        .collect::<HashMap<&str, usize>>();
+        .collect::<HashMap<&str, CmdIdx>>();
 
     let target = |name: &String| labels[name.as_str()];
 
     // index vom nöächsten ziel wenn es denn eins gibt...
-    let next = |i: usize| (i + 1 < chunks.len()).then_some(i + 1);
+    let next = |i: CmdIdx| (i + 1 < chunks.len()).then_some(i + 1);
 
     chunks
         .iter()

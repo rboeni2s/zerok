@@ -11,6 +11,7 @@ use crate::{
     annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
     reg_util::Reserved,
+    spill::Liveness,
     symbol::Symbol,
 };
 use iic_quote::iic_quote;
@@ -33,7 +34,12 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
         .generate_func(&mut ir);
     }
 
-    ir.build()
+    let raw_ir = ir.build();
+
+    let liveness = Liveness::new(&raw_ir);
+    dbg!(liveness);
+
+    raw_ir
 }
 
 
@@ -81,10 +87,13 @@ impl<'a> GenEnv<'_, 'a>
 
                 match self.env.get_unchecked(annotation.cell)
                 {
-                    EnvEntry::Register(reg) => IrTypedReg {
-                        reg: IrReg::R(reg),
-                        kind: annotation.kind,
-                    },
+                    EnvEntry::Register(reg) =>
+                    {
+                        IrTypedReg {
+                            reg: IrReg::R(reg),
+                            kind: annotation.kind,
+                        }
+                    }
                     EnvEntry::Atom(_) => unreachable!("Parameters are always stored in registers"),
                 }
             })
