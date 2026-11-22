@@ -1,4 +1,5 @@
 mod cfg;
+mod intf_graph;
 mod liveness;
 mod reg_helper;
 

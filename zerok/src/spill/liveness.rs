@@ -27,13 +27,16 @@ impl Liveness
     /// Computes the liveness of all registers of `chunks`
     pub fn new(chunks: &[IrChunk<EnvEntry, Kind>]) -> Self
     {
+        // Listet alle nachfolger einer instruction auf
         let succ = cfg_successors(chunks);
 
+        // Listet alle gelesenen register pro instruction auf
         let uses: Vec<BTreeSet<RegNum>> = chunks
             .iter()
             .map(|c| c.cfg_use().into_iter().collect())
             .collect();
 
+        // Listet alle geschriebenen register pro instruction auf
         let defs: Vec<BTreeSet<RegNum>> = chunks
             .iter()
             .map(|c| c.cfg_def().into_iter().collect())
@@ -49,27 +52,29 @@ impl Liveness
 
             for n in (0..chunks.len()).rev()
             {
-                // Nach n ist live, was irgendein nachfolger braucht
-                let out: BTreeSet<RegNum> = succ[n]
+                // Nach n ist alles live was irgendeiner von n's nachfolgern braucht
+                // "out"[n] = union.big_(s in "succ"(n)) "in"[s]
+                let out_n: BTreeSet<RegNum> = succ[n]
                     .iter()
                     .flat_map(|&s| live_in[s].iter().copied())
                     .collect();
 
-                // Vor n ist live, was n liest, plus was danach live ist und nicht von n überschrieben wird
-                let inn: BTreeSet<RegNum> = uses[n]
+                // Vor n ist live, was n liest, UND was danach live ist und nicht von n überschrieben wird
+                // "in"[n] = "use"[n] union ("out"[n] without "def"[n])
+                let in_n: BTreeSet<RegNum> = uses[n]
                     .iter()
                     .copied()
-                    .chain(out.difference(&defs[n]).copied())
+                    .chain(out_n.difference(&defs[n]).copied())
                     .collect();
 
-                // `out` hängt nur von den `in`-mengen ab, es reicht also deren änderungen zu prüfen
-                if inn != live_in[n]
+                // nur die in-menge prüfen, da `out` nur von den in-mengen abhängt (hoffe ich)
+                if in_n != live_in[n]
                 {
-                    live_in[n] = inn;
+                    live_in[n] = in_n;
                     changed = true;
                 }
 
-                live_out[n] = out;
+                live_out[n] = out_n;
             }
         }
 

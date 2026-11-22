@@ -48,6 +48,8 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
             }
 
             IrChunk::MemRead { base, offset, .. } => operands([base, offset]),
+
+            // nix lesen:
             IrChunk::Func { .. } | IrChunk::Label { .. } | IrChunk::Jump { .. } => Vec::new(),
         }
     }
