@@ -4,7 +4,7 @@ use ir::{IrReg, IrTypedReg};
 
 
 /// Extracts the R register number from a value (like `EnvEntry` or `IrTypedReg`)
-pub(crate) trait GetRegR
+pub trait GetRegR
 {
     fn get_r_reg_of(&self) -> Option<RegNum>;
 }

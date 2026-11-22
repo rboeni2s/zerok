@@ -74,11 +74,13 @@ where
         let param = ident
             .then_ignore(just(Token::Colon))
             .then(Type::parser())
-            .map_with(|(name, kind), info| Param {
-                name,
-                kind,
-                span: info.span(),
-                data: D::default(),
+            .map_with(|(name, kind), info| {
+                Param {
+                    name,
+                    kind,
+                    span: info.span(),
+                    data: D::default(),
+                }
             });
 
         let params = param
@@ -96,12 +98,14 @@ where
             .then(params)
             .then(ret)
             .then(body)
-            .map_with(|(((name, params), ret), body), info| Function {
-                name,
-                params,
-                ret,
-                body,
-                span: info.span(),
+            .map_with(|(((name, params), ret), body), info| {
+                Function {
+                    name,
+                    params,
+                    ret,
+                    body,
+                    span: info.span(),
+                }
             });
 
         function

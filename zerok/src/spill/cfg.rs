@@ -6,7 +6,7 @@ use crate::{
         reg_helper::{GetRegR, operands},
     },
 };
-use ir::IrChunk;
+use ir::{IrChunk, IrTypedReg};
 use std::collections::HashMap;
 
 
@@ -18,6 +18,9 @@ pub trait CfgRegs
 
     /// Returns a vector of all local registers being written to by this instruction
     fn cfg_def(&self) -> Vec<RegNum>;
+
+    /// Like [`Self::cfg_def`], together with the kind of the value written to each register
+    fn cfg_def_kinds(&self) -> Vec<(RegNum, Kind)>;
 }
 
 
@@ -57,23 +60,37 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
     /// Returns a Vec of all R Register numbers written by this instruction
     fn cfg_def(&self) -> Vec<RegNum>
     {
-        match self
+        self.cfg_def_kinds()
+            .into_iter()
+            .map(|(reg, _)| reg)
+            .collect()
+    }
+
+    /// Returns a Vec of all R Register numbers written by this instruction and their kinds
+    fn cfg_def_kinds(&self) -> Vec<(RegNum, Kind)>
+    {
+        // Geschriebene register sind immer `IrTypedReg`s, kennen also ihren typ
+        let regs: &[IrTypedReg<Kind>] = match self
         {
-            IrChunk::Func { args, .. } => args.iter().filter_map(|r| r.get_r_reg_of()).collect(),
+            IrChunk::Func { args, .. } => args,
 
             IrChunk::Bin { reg, .. }
             | IrChunk::Una { reg, .. }
             | IrChunk::Bind { reg, .. }
             | IrChunk::Call { reg, .. }
             | IrChunk::MemAlloc { reg, .. }
-            | IrChunk::MemRead { reg, .. } => reg.get_r_reg_of().into_iter().collect(),
+            | IrChunk::MemRead { reg, .. } => std::slice::from_ref(reg),
 
             IrChunk::Ret { .. }
             | IrChunk::Label { .. }
             | IrChunk::Jump { .. }
             | IrChunk::CondJump { .. }
-            | IrChunk::MemWrite { .. } => Vec::new(),
-        }
+            | IrChunk::MemWrite { .. } => &[],
+        };
+
+        regs.iter()
+            .filter_map(|r| r.get_r_reg_of().map(|reg| (reg, r.kind)))
+            .collect()
     }
 }
 
