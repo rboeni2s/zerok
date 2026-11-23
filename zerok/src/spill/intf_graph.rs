@@ -33,7 +33,7 @@ pub fn register_classes(chunks: &[IrChunk<EnvEntry, Kind>]) -> HashMap<RegNum, R
         // Wird ein register einmal als int und einmal als float geschrieben ist das ein codegen bug
         debug_assert!(
             prev.is_none_or(|prev| prev == class),
-            "register R{reg} is written as {prev:?} and {class:?}"
+            "register {reg} is written as {prev:?} and {class:?}"
         );
     }
 

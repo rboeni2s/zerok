@@ -66,7 +66,7 @@ impl<'a> Liveness<'a>
                 // "out"[n] = union.big_(s in "succ"(n)) "in"[s]
                 let out_n: BTreeSet<RegNum> = succ[n]
                     .iter()
-                    .flat_map(|&s| live_in[s].iter().copied())
+                    .flat_map(|&s| live_in[s.0].iter().copied())
                     .collect();
 
                 // Vor n ist live, was n liest, UND was danach live ist und nicht von n überschrieben wird

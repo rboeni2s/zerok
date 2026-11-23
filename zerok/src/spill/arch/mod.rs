@@ -45,13 +45,13 @@ pub trait RegFile
     /// The register of color `color`
     fn reg_of(color: Color) -> Self::Reg
     {
-        Self::USEABLE[color]
+        Self::USEABLE[color.0]
     }
 
     /// The color of `reg`, or `None` if `reg` is not useable
     fn color_of(reg: Self::Reg) -> Option<Color>
     {
-        Self::USEABLE.iter().position(|&r| r == reg)
+        Self::USEABLE.iter().position(|&r| r == reg).map(Color)
     }
 }
 

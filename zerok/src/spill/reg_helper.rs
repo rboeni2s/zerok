@@ -16,7 +16,7 @@ impl GetRegR for EnvEntry
     {
         match self
         {
-            EnvEntry::Register(reg) => Some(*reg),
+            EnvEntry::Register(reg) => Some(RegNum(*reg)),
             EnvEntry::Global(_) | EnvEntry::Label(_) | EnvEntry::Atom(_) => None,
         }
     }
@@ -28,7 +28,7 @@ impl GetRegR for IrTypedReg<Kind>
     {
         match self.reg
         {
-            IrReg::R(reg) => Some(reg),
+            IrReg::R(reg) => Some(RegNum(reg)),
             IrReg::G(_) => None,
         }
     }

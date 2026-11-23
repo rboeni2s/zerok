@@ -14,6 +14,8 @@ use zerok::spill::{
     IntfGraph,
     IntfNode,
     Liveness,
+    CmdIdx,
+    Color,
     NodeColor,
     RegClass,
     RegNum,
@@ -22,17 +24,17 @@ use zerok::spill::{
 };
 
 
-fn r(reg: RegNum) -> EnvEntry
+fn r(reg: usize) -> EnvEntry
 {
     EnvEntry::Register(reg)
 }
 
-fn tr(reg: RegNum) -> IrTypedReg<Kind>
+fn tr(reg: usize) -> IrTypedReg<Kind>
 {
     trk(reg, Kind::I64)
 }
 
-fn trk(reg: RegNum, kind: Kind) -> IrTypedReg<Kind>
+fn trk(reg: usize, kind: Kind) -> IrTypedReg<Kind>
 {
     IrTypedReg {
         reg: IrReg::R(reg),
@@ -40,9 +42,14 @@ fn trk(reg: RegNum, kind: Kind) -> IrTypedReg<Kind>
     }
 }
 
-fn set(regs: &[RegNum]) -> BTreeSet<RegNum>
+fn set(regs: &[usize]) -> BTreeSet<RegNum>
 {
-    regs.iter().copied().collect()
+    regs.iter().copied().map(RegNum).collect()
+}
+
+fn regs(regs: &[usize]) -> Vec<RegNum>
+{
+    regs.iter().copied().map(RegNum).collect()
 }
 
 /// f(R1): R2 = 0; while R2 < R1 { R2 = R2 + 1 }; return R2
@@ -97,14 +104,14 @@ fn loop_chunks() -> Vec<IrChunk<EnvEntry, Kind>>
     ]
 }
 
-fn interferes(graph: &IntfGraph, reg: RegNum) -> BTreeSet<RegNum>
+fn interferes(graph: &IntfGraph, reg: usize) -> BTreeSet<RegNum>
 {
-    neighbours::<IntNode>(graph, reg, IntfEdge::Interferes).collect()
+    neighbours::<IntNode>(graph, RegNum(reg), IntfEdge::Interferes).collect()
 }
 
-fn move_partners(graph: &IntfGraph, reg: RegNum) -> BTreeSet<RegNum>
+fn move_partners(graph: &IntfGraph, reg: usize) -> BTreeSet<RegNum>
 {
-    neighbours::<IntNode>(graph, reg, IntfEdge::Move).collect()
+    neighbours::<IntNode>(graph, RegNum(reg), IntfEdge::Move).collect()
 }
 
 fn nodes<N: IntfNode>(graph: &IntfGraph) -> BTreeSet<RegNum>
@@ -127,9 +134,9 @@ fn cfg_use_def()
         rhs: EnvEntry::Atom(Atom::Int(1)),
         reg: tr(2),
     };
-    assert_eq!(bin.cfg_use(), vec![1]);
-    assert_eq!(bin.cfg_def(), vec![2]);
-    assert_eq!(bin.cfg_def_kinds(), vec![(2, Kind::I64)]);
+    assert_eq!(bin.cfg_use(), regs(&[1]));
+    assert_eq!(bin.cfg_def(), regs(&[2]));
+    assert_eq!(bin.cfg_def_kinds(), vec![(RegNum(2), Kind::I64)]);
 
     // `base` ist ein `IrTypedReg`, wird aber nur gelesen
     let write = IrChunk::MemWrite {
@@ -139,7 +146,7 @@ fn cfg_use_def()
     };
     let mut uses = write.cfg_use();
     uses.sort();
-    assert_eq!(uses, vec![1, 2, 3]);
+    assert_eq!(uses, regs(&[1, 2, 3]));
     assert!(write.cfg_def().is_empty());
 
     // Parameter werden am funktionseingang geschrieben
@@ -148,7 +155,7 @@ fn cfg_use_def()
         args: vec![tr(1), trk(2, Kind::F64)],
     };
     assert!(func.cfg_use().is_empty());
-    assert_eq!(func.cfg_def_kinds(), vec![(1, Kind::I64), (2, Kind::F64)]);
+    assert_eq!(func.cfg_def_kinds(), vec![(RegNum(1), Kind::I64), (RegNum(2), Kind::F64)]);
 }
 
 
@@ -157,7 +164,7 @@ fn cfg_successors_loop()
 {
     assert_eq!(
         cfg_successors(&loop_chunks()),
-        vec![
+        [
             vec![1],
             vec![2],
             vec![3],
@@ -169,6 +176,7 @@ fn cfg_successors_loop()
             vec![9],
             vec![]
         ]
+        .map(|succ| succ.into_iter().map(CmdIdx).collect::<Vec<_>>())
     );
 }
 
@@ -236,10 +244,10 @@ fn register_classes_by_kind()
     assert_eq!(
         register_classes(&chunks),
         HashMap::from([
-            (1, RegClass::Gpr),
-            (2, RegClass::Float),
-            (3, RegClass::Gpr),
-            (4, RegClass::Float),
+            (RegNum(1), RegClass::Gpr),
+            (RegNum(2), RegClass::Float),
+            (RegNum(3), RegClass::Gpr),
+            (RegNum(4), RegClass::Float),
         ])
     );
 }
@@ -253,11 +261,11 @@ fn interference_loop()
     let graph = graph_of(&chunks);
 
     assert_eq!(graph.iter().count(), 4);
-    assert_eq!(interferes(&graph, 1), BTreeSet::from([2, 3, 4]));
-    assert_eq!(interferes(&graph, 2), BTreeSet::from([1, 3, 4]));
+    assert_eq!(interferes(&graph, 1), set(&[2, 3, 4]));
+    assert_eq!(interferes(&graph, 2), set(&[1, 3, 4]));
     // R3 und R4 leben nie gleichzeitig und dürfen sich ein register teilen
-    assert_eq!(interferes(&graph, 3), BTreeSet::from([1, 2]));
-    assert_eq!(interferes(&graph, 4), BTreeSet::from([1, 2]));
+    assert_eq!(interferes(&graph, 3), set(&[1, 2]));
+    assert_eq!(interferes(&graph, 4), set(&[1, 2]));
 
     // `R2 = 0` bindet ein literal, das ist kein move zwischen registern
     assert!((1..=4).all(|reg| move_partners(&graph, reg).is_empty()));
@@ -294,8 +302,8 @@ fn interference_move_exception()
     assert!(interferes(&graph, 3).is_empty());
 
     // Stattdessen sind sie über eine move-kante verbunden
-    assert_eq!(move_partners(&graph, 1), BTreeSet::from([2]));
-    assert_eq!(move_partners(&graph, 2), BTreeSet::from([1]));
+    assert_eq!(move_partners(&graph, 1), set(&[2]));
+    assert_eq!(move_partners(&graph, 2), set(&[1]));
     assert!(move_partners(&graph, 3).is_empty());
 }
 
@@ -332,8 +340,8 @@ fn interference_constrained_move()
     let graph = graph_of(&chunks);
 
     // Beide kanten: der move bleibt bekannt, darf aber nicht verschmolzen werden
-    assert_eq!(interferes(&graph, 1), BTreeSet::from([2]));
-    assert_eq!(move_partners(&graph, 1), BTreeSet::from([2]));
+    assert_eq!(interferes(&graph, 1), set(&[2]));
+    assert_eq!(move_partners(&graph, 1), set(&[2]));
 }
 
 
@@ -353,8 +361,8 @@ fn interference_params()
 
     let graph = graph_of(&chunks);
 
-    assert_eq!(interferes(&graph, 1), BTreeSet::from([2]));
-    assert_eq!(interferes(&graph, 2), BTreeSet::from([1]));
+    assert_eq!(interferes(&graph, 1), set(&[2]));
+    assert_eq!(interferes(&graph, 2), set(&[1]));
 }
 
 
@@ -390,17 +398,17 @@ fn interference_classes()
 
     let graph = graph_of(&chunks);
 
-    assert_eq!(nodes::<IntNode>(&graph), BTreeSet::from([1, 3, 5]));
-    assert_eq!(nodes::<FloatNode>(&graph), BTreeSet::from([2, 4]));
+    assert_eq!(nodes::<IntNode>(&graph), set(&[1, 3, 5]));
+    assert_eq!(nodes::<FloatNode>(&graph), set(&[2, 4]));
 
     // Die float register R2 und R4 leben gleichzeitig und interferieren
     let float_neighbours =
-        |reg| neighbours::<FloatNode>(&graph, reg, IntfEdge::Interferes).collect::<BTreeSet<_>>();
-    assert_eq!(float_neighbours(2), BTreeSet::from([4]));
-    assert_eq!(float_neighbours(4), BTreeSet::from([2]));
+        |reg| neighbours::<FloatNode>(&graph, RegNum(reg), IntfEdge::Interferes).collect::<BTreeSet<_>>();
+    assert_eq!(float_neighbours(2), set(&[4]));
+    assert_eq!(float_neighbours(4), set(&[2]));
 
     // Zwischen den klassen gibt es keine kanten, obwohl z.b. R2 und R3 gleichzeitig leben
-    for reg in 1..=5
+    for reg in (1..=5).map(RegNum)
     {
         assert!(
             graph
@@ -433,28 +441,28 @@ fn interference_node_color()
     let mut graph = graph_of(&chunks);
 
     assert_eq!(
-        graph.get::<IntNode>(1).unwrap().color(),
+        graph.get::<IntNode>(RegNum(1)).unwrap().color(),
         NodeColor::Uncolored
     );
     assert_eq!(
-        graph.get::<FloatNode>(2).unwrap().color(),
+        graph.get::<FloatNode>(RegNum(2)).unwrap().color(),
         NodeColor::Uncolored
     );
 
     graph
-        .get_mut::<IntNode>(1)
+        .get_mut::<IntNode>(RegNum(1))
         .unwrap()
-        .set_color(NodeColor::Colored(3));
+        .set_color(NodeColor::Colored(Color(3)));
     graph
-        .get_mut::<FloatNode>(2)
+        .get_mut::<FloatNode>(RegNum(2))
         .unwrap()
-        .set_color(NodeColor::Precolored(0));
+        .set_color(NodeColor::Precolored(Color(0)));
 
-    assert_eq!(graph.get::<IntNode>(1).unwrap().color().color(), Some(3));
-    assert_eq!(graph.get::<FloatNode>(2).unwrap().color().color(), Some(0));
+    assert_eq!(graph.get::<IntNode>(RegNum(1)).unwrap().color().color(), Some(Color(3)));
+    assert_eq!(graph.get::<FloatNode>(RegNum(2)).unwrap().color().color(), Some(Color(0)));
 
     // Der knotentyp muss zur klasse passen
-    assert!(graph.get::<FloatNode>(1).is_none());
+    assert!(graph.get::<FloatNode>(RegNum(1)).is_none());
 }
 
 
@@ -489,8 +497,8 @@ fn split_functions_at_func()
     // R256 ist in f ein int, in g ein float: pro funktion analysiert gibt es keinen konflikt
     let f = build_interference_graph(&Liveness::new(funcs[0]));
     let g = build_interference_graph(&Liveness::new(funcs[1]));
-    assert_eq!(nodes::<IntNode>(&f), BTreeSet::from([256]));
-    assert_eq!(nodes::<FloatNode>(&g), BTreeSet::from([256, 257]));
+    assert_eq!(nodes::<IntNode>(&f), set(&[256]));
+    assert_eq!(nodes::<FloatNode>(&g), set(&[256, 257]));
 }
 
 
@@ -518,13 +526,13 @@ fn interference_ignores_none_registers()
     ];
 
     let classes = register_classes(&chunks);
-    assert_eq!(classes.get(&3), None);
-    assert_eq!(classes.get(&4), None);
+    assert_eq!(classes.get(&RegNum(3)), None);
+    assert_eq!(classes.get(&RegNum(4)), None);
 
     let graph = graph_of(&chunks);
 
     // Nur R1 und R2 brauchen ein register
-    assert_eq!(nodes::<IntNode>(&graph), BTreeSet::from([1, 2]));
-    assert!(graph.get_entry(3).is_none());
-    assert!(graph.get_entry(4).is_none());
+    assert_eq!(nodes::<IntNode>(&graph), set(&[1, 2]));
+    assert!(graph.get_entry(RegNum(3)).is_none());
+    assert!(graph.get_entry(RegNum(4)).is_none());
 }

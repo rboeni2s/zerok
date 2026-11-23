@@ -119,7 +119,7 @@ pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
         .filter_map(|(i, c)| {
             match c
             {
-                IrChunk::Label { name } => Some((name.as_str(), i)),
+                IrChunk::Label { name } => Some((name.as_str(), CmdIdx(i))),
                 _ => None,
             }
         })
@@ -128,7 +128,7 @@ pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
     let target = |name: &String| labels[name.as_str()];
 
     // index vom nöächsten ziel wenn es denn eins gibt...
-    let next = |i: CmdIdx| (i + 1 < chunks.len()).then_some(i + 1);
+    let next = |i: usize| (i + 1 < chunks.len()).then_some(CmdIdx(i + 1));
 
     chunks
         .iter()
