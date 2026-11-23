@@ -6,6 +6,7 @@ pub mod diagnostic;
 pub mod gen_ir;
 pub mod parser;
 pub mod reg_util;
+pub mod spill;
 pub mod symbol;
 
 use crate::{

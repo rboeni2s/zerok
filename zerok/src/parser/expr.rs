@@ -146,18 +146,22 @@ where
                     .then(Type::parser())
                     .then_ignore(just(Token::Eq))
                     .then(term.clone())
-                    .map(|((name, kind), val)| Self::Decl {
-                        name,
-                        kind,
-                        val: Box::new(val),
+                    .map(|((name, kind), val)| {
+                        Self::Decl {
+                            name,
+                            kind,
+                            val: Box::new(val),
+                        }
                     })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
                 // Check if this expression is a return, the returned value is optional
                 let ret = just(Token::Return)
                     .ignore_then(term.clone().or_not())
-                    .map(|val| Self::Return {
-                        val: val.map(Box::new),
+                    .map(|val| {
+                        Self::Return {
+                            val: val.map(Box::new),
+                        }
                     })
                     .map_with(|expr, span| AstNode::new(expr, span.span()));
 
@@ -320,18 +324,20 @@ where
         chain.define(
             expr_chain
                 .then(just(Token::Semicolon).or_not())
-                .map_with(|(mut chain, term), info| match term
-                {
-                    Some(_) =>
+                .map_with(|(mut chain, term), info| {
+                    match term
                     {
-                        if let Self::Chain(chain) = &mut chain
+                        Some(_) =>
                         {
-                            chain.push(Expr::Atom(Atom::Nop).into());
-                        }
+                            if let Self::Chain(chain) = &mut chain
+                            {
+                                chain.push(Expr::Atom(Atom::Nop).into());
+                            }
 
-                        AstNode::new(chain, info.span())
+                            AstNode::new(chain, info.span())
+                        }
+                        None => AstNode::new(chain, info.span()),
                     }
-                    None => AstNode::new(chain, info.span()),
                 })
                 // Try to skip malformed input in case of an error, so that the rest of the input can be checked
                 //TODO: This doesnt work, i should debug and fix this

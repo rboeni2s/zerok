@@ -11,6 +11,7 @@ use crate::{
     annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
     reg_util::{self, FnReserved, GbReserved},
+    spill::{Liveness, build_interference_graph, split_functions},
     symbol::Symbol,
 };
 use iic_quote::iic_quote;
@@ -56,7 +57,16 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
 
     generate_entry_point(env, &mut ir, prelude);
 
-    ir.build()
+    let raw_ir = ir.build();
+
+    // Register nummern beginnen in jeder funktion neu, also pro funktion analysieren
+    for func in split_functions(&raw_ir)
+    {
+        let liveness = Liveness::new(func);
+        let _graph = build_interference_graph(&liveness);
+    }
+
+    raw_ir
 }
 
 

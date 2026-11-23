@@ -75,19 +75,27 @@ impl<'a> Function<'a, Option<Annotation>>
         // A function without a return type does not return anything
         let ret = match &self.ret
         {
-            Some(ret) => Kind::from_type(ret)
-                .ok_or_else(|| (self.span, format!("Unknown type \"{ret}\"")))?,
+            Some(ret) =>
+            {
+                Kind::from_type(ret)
+                    .ok_or_else(|| (self.span, format!("Unknown type \"{ret}\"")))?
+            }
             None => Kind::None,
         };
 
         let params = self
             .params
             .iter()
-            .map(|param| match Kind::from_type(&param.kind)
-            {
-                Some(Kind::None) => Err((param.span, "Parameters can not be of type none".into())),
-                Some(kind) => Ok(kind),
-                None => Err((param.span, format!("Unknown type \"{}\"", param.kind))),
+            .map(|param| {
+                match Kind::from_type(&param.kind)
+                {
+                    Some(Kind::None) =>
+                    {
+                        Err((param.span, "Parameters can not be of type none".into()))
+                    }
+                    Some(kind) => Ok(kind),
+                    None => Err((param.span, format!("Unknown type \"{}\"", param.kind))),
+                }
             })
             .collect::<Result<_, _>>()?;
 

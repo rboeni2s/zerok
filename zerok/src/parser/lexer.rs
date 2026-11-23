@@ -260,21 +260,23 @@ pub fn lexer<'src>()
         .map(Token::Str);
 
     // Identifiers are lexed as a whole, so that keywords are only recognized if they are not a prefix of an identifier
-    let ident = text::ident().map(|ident| match ident
-    {
-        KW_DECL => Token::Decl,
-        KW_NOP => Token::Nop,
-        KW_AS => Token::As,
-        KW_FN => Token::Fn,
-        KW_RET => Token::Return,
-        KW_IF => Token::If,
-        KW_ELSE => Token::Else,
-        KW_TRUE => Token::Bool(true),
-        KW_FALSE => Token::Bool(false),
-        KW_BREAK => Token::Break,
-        KW_CONTINUE => Token::Continue,
-        KW_LOOP => Token::Loop,
-        _ => Token::Ident(ident),
+    let ident = text::ident().map(|ident| {
+        match ident
+        {
+            KW_DECL => Token::Decl,
+            KW_NOP => Token::Nop,
+            KW_AS => Token::As,
+            KW_FN => Token::Fn,
+            KW_RET => Token::Return,
+            KW_IF => Token::If,
+            KW_ELSE => Token::Else,
+            KW_TRUE => Token::Bool(true),
+            KW_FALSE => Token::Bool(false),
+            KW_BREAK => Token::Break,
+            KW_CONTINUE => Token::Continue,
+            KW_LOOP => Token::Loop,
+            _ => Token::Ident(ident),
+        }
     });
 
     // Multi character symbols have to be checked before the single character symbols they start with

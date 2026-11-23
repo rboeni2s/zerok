@@ -93,11 +93,13 @@ pub fn function<'a, D: Default>(
         name,
         params: params
             .iter()
-            .map(|(name, kind)| Param {
-                name,
-                kind: kind.clone(),
-                span: Default::default(),
-                data: Default::default(),
+            .map(|(name, kind)| {
+                Param {
+                    name,
+                    kind: kind.clone(),
+                    span: Default::default(),
+                    data: Default::default(),
+                }
             })
             .collect(),
         ret,

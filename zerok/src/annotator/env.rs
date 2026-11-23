@@ -222,11 +222,14 @@ impl<'a, T> Env<'a, T>
         match self.bindings.borrow().get(name).copied()
         {
             Some(binding) => Some(binding),
-            None => match &self.parent
+            None =>
             {
-                Some(parent) => parent.fetch_bound_cell(name),
-                None => None,
-            },
+                match &self.parent
+                {
+                    Some(parent) => parent.fetch_bound_cell(name),
+                    None => None,
+                }
+            }
         }
     }
 
