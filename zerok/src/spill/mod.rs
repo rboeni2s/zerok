@@ -1,3 +1,4 @@
+pub mod arch;
 pub mod cfg;
 pub mod intf_graph;
 pub mod liveness;
@@ -13,6 +14,7 @@ pub type CmdIdx = usize;
 pub type Color = usize;
 
 
+pub use cfg::split_functions;
 pub use intf_graph::{
     FloatNode,
     IntNode,
@@ -25,5 +27,4 @@ pub use intf_graph::{
     build_interference_graph,
     neighbours,
 };
-pub use cfg::split_functions;
 pub use liveness::Liveness;

@@ -236,9 +236,9 @@ fn register_classes_by_kind()
     assert_eq!(
         register_classes(&chunks),
         HashMap::from([
-            (1, RegClass::Int),
+            (1, RegClass::Gpr),
             (2, RegClass::Float),
-            (3, RegClass::Int),
+            (3, RegClass::Gpr),
             (4, RegClass::Float),
         ])
     );
@@ -462,10 +462,21 @@ fn interference_node_color()
 fn split_functions_at_func()
 {
     let chunks = vec![
-        IrChunk::Func { name: "f".into(), args: vec![tr(256)] },
+        IrChunk::Func {
+            name: "f".into(),
+            args: vec![tr(256)],
+        },
         IrChunk::Ret { val: r(256) },
-        IrChunk::Func { name: "g".into(), args: vec![trk(256, Kind::F64)] },
-        IrChunk::Bin { op: IrOp::Mul, lhs: r(256), rhs: r(256), reg: trk(257, Kind::F64) },
+        IrChunk::Func {
+            name: "g".into(),
+            args: vec![trk(256, Kind::F64)],
+        },
+        IrChunk::Bin {
+            op: IrOp::Mul,
+            lhs: r(256),
+            rhs: r(256),
+            reg: trk(257, Kind::F64),
+        },
         IrChunk::Ret { val: r(257) },
     ];
 
@@ -489,9 +500,20 @@ fn split_functions_at_func()
 fn interference_ignores_none_registers()
 {
     let chunks = vec![
-        IrChunk::Func { name: "f".into(), args: vec![tr(1)] },
-        IrChunk::Bin { op: IrOp::Add, lhs: r(1), rhs: EnvEntry::Atom(Atom::Int(2)), reg: tr(2) },
-        IrChunk::Bind { val: r(3), reg: trk(4, Kind::None) },
+        IrChunk::Func {
+            name: "f".into(),
+            args: vec![tr(1)],
+        },
+        IrChunk::Bin {
+            op: IrOp::Add,
+            lhs: r(1),
+            rhs: EnvEntry::Atom(Atom::Int(2)),
+            reg: tr(2),
+        },
+        IrChunk::Bind {
+            val: r(3),
+            reg: trk(4, Kind::None),
+        },
         IrChunk::Ret { val: r(2) },
     ];
 

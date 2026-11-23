@@ -10,7 +10,7 @@ use cache_map::prelude::*;
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RegClass
 {
-    Int,
+    Gpr,
     Float,
 }
 
@@ -25,7 +25,7 @@ impl RegClass
         {
             Kind::None => None,
             Kind::F32 | Kind::F64 => Some(Self::Float),
-            _ => Some(Self::Int),
+            _ => Some(Self::Gpr),
         }
     }
 }
@@ -115,7 +115,7 @@ pub trait IntfNode: CacheEntry<IntfEntries> + IdentRef<RegNum>
 
 impl IntfNode for IntNode
 {
-    const CLASS: RegClass = RegClass::Int;
+    const CLASS: RegClass = RegClass::Gpr;
 
     fn new(reg: RegNum) -> Self
     {

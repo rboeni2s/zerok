@@ -74,7 +74,7 @@ pub fn build_interference_graph(liveness: &Liveness) -> graph_setup::IntfGraph
         {
             match class_of(reg)
             {
-                Some(RegClass::Int) => graph.insert(IntNode::new(reg)),
+                Some(RegClass::Gpr) => graph.insert(IntNode::new(reg)),
                 Some(RegClass::Float) => graph.insert(FloatNode::new(reg)),
                 None => None,
             };
