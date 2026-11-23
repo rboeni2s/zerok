@@ -69,7 +69,7 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
     /// Returns a Vec of all R Register numbers written by this instruction and their kinds
     fn cfg_def_kinds(&self) -> Vec<(RegNum, Kind)>
     {
-        // Geschriebene register sind immer `IrTypedReg`s, kennen also ihren typ
+        // Geschriebene register sind immer `IrTypedReg`s, kennen also IMMER ihren typ
         let regs: &[IrTypedReg<Kind>] = match self
         {
             IrChunk::Func { args, .. } => args,
@@ -116,12 +116,10 @@ pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
     let labels = chunks
         .iter()
         .enumerate()
-        .filter_map(|(i, c)| {
-            match c
-            {
-                IrChunk::Label { name } => Some((name.as_str(), CmdIdx(i))),
-                _ => None,
-            }
+        .filter_map(|(i, c)| match c
+        {
+            IrChunk::Label { name } => Some((name.as_str(), CmdIdx(i))),
+            _ => None,
         })
         .collect::<HashMap<&str, CmdIdx>>();
 
@@ -141,13 +139,10 @@ pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
 
                 // Conditional Jump: Könnte Springen wie jump, könnte aber auch einfach normal weiter laufen
                 // also sowohl das sprungziel als auch die nächste instruction merken
-                IrChunk::CondJump { name, .. } =>
-                {
-                    [Some(target(name)), next(i)]
-                        .into_iter()
-                        .flatten()
-                        .collect()
-                }
+                IrChunk::CondJump { name, .. } => [Some(target(name)), next(i)]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
 
                 // Bei return ist die funktion zu ende, also keinen nachfolger
                 IrChunk::Ret { .. } => vec![],

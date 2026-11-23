@@ -1,6 +1,5 @@
-use std::collections::BTreeSet;
-
 use ir::IrChunk;
+use std::collections::BTreeSet;
 
 use crate::{
     annotator::{EnvEntry, Kind},

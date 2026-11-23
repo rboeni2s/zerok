@@ -57,14 +57,7 @@ pub trait RegFile
 
 
 /// Placeholder register file for a class the architecture has no registers for,
-/// e.g. `Arch::Float` on a soft-float architecture.
-///
-/// The file has no useable registers (`COLORS == 0`). `Arch::class_of` of such an architecture
-/// must never return the class of this file, so there are no nodes of this class and the
-/// coloring never needs one of its colors.
-///
-/// `RETURN` and `SCRATCH` only exist because the trait requires them: they are
-/// [`EmptyFile::Placeholder`], which is no real register and has no color.
+/// eg. `Arch::Float` on a soft-float architecture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EmptyFile
 {
