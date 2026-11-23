@@ -2,6 +2,12 @@ pub mod target
 {
     mod sysv;
     pub use sysv::*;
+
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum Target
+    {
+        SysV64,
+    }
 }
 
 
@@ -31,6 +37,22 @@ pub trait RegFile
 
     /// Return register, must also appear in `Self::Useable`
     const RETURN: Self::Reg;
+
+    /// Scratch register for spill code.
+    /// Must _not_ appear in `Self::USEABLE`.
+    const SCRATCH: Self::Reg;
+
+    /// The register of color `color`
+    fn reg_of(color: Color) -> Self::Reg
+    {
+        Self::USEABLE[color]
+    }
+
+    /// The color of `reg`, or `None` if `reg` is not useable
+    fn color_of(reg: Self::Reg) -> Option<Color>
+    {
+        Self::USEABLE.iter().position(|&r| r == reg)
+    }
 }
 
 
