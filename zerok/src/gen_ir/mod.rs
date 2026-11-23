@@ -11,7 +11,7 @@ use crate::{
     annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
     reg_util::{self, FnReserved, GbReserved},
-    spill::{Liveness, build_interference_graph, split_functions},
+    spill::{Liveness, arch::target::SysV64, build_interference_graph, split_functions},
     symbol::Symbol,
 };
 use iic_quote::iic_quote;
@@ -63,7 +63,8 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
     for func in split_functions(&raw_ir)
     {
         let liveness = Liveness::new(func);
-        let _graph = build_interference_graph(&liveness);
+        // TODO: Architektur auswahl via cli
+        let _graph = build_interference_graph::<SysV64>(&liveness);
     }
 
     raw_ir

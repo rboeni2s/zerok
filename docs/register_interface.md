@@ -230,11 +230,12 @@ Der Allokator sieht dann nur gleichförmige Klassen.
 
 ## Offene Fragen
 
-- **Schlüssel der Maschinenregister im Graphen:** Für die Vorfärbung und die Kanten zu
-  `CALLER_SAVED` braucht jedes Maschinenregister einen eigenen Knoten mit einer `RegNum`, die nicht
-  mit virtuellen Registern kollidiert. Kandidat: der Bereich `0..256`. Virtuelle Register beginnen
-  bei `FUNCTION_REGISTER_RANGE_START = 256`, und `Reserved::Return = 0` liegt schon dort.
-  Alternative: den Schlüssel auf `enum NodeId { Virt(RegNum), Phys(Color) }` umstellen.
+- ~~**Schlüssel der Maschinenregister im Graphen**~~ **Entschieden:** Der Graph verwendet
+  `enum NodeId { Virt(RegNum), Phys(RegClass, Color) }` als Schlüssel. Die Klasse gehört mit in
+  den Schlüssel, weil eine Farbe allein mehrdeutig ist (`Color(0)` ist `rax` und `xmm0`). Knoten
+  für Maschinenregister entstehen nur über `N::phys(color)`, das die Klasse aus `N::CLASS` nimmt
+  und den Knoten mit seiner eigenen Farbe vorfärbt. Der Bereich `0..256` wird dafür nicht
+  gebraucht.
 - **`Reserved::Return`:** Das ist im Grunde schon ein vorgefärbter Knoten (`RETURN` der Klasse)
   und könnte mit der Vorfärbung als Sonderfall entfallen.
 
@@ -243,6 +244,6 @@ Der Allokator sieht dann nur gleichförmige Klassen.
 1. `RegFile`, `Arch` und `SysV64` mit `SysV64Gpr`/`SysV64Xmm` anlegen.
 2. `IntfNode::File<A>` ergänzen.
 3. `Arch::class_of` statt `RegClass::of` und den Graphaufbau generisch über `A` machen.
-4. Schlüssel der Maschinenregister klären und die Vorfärbung umsetzen.
+4. ~~Schlüssel der Maschinenregister klären~~ (`NodeId`) und die Vorfärbung umsetzen.
 5. Simplify und Select als `color::<A, N>`.
 6. Spill-Code erzeugen und die Schleife bis zur gültigen Färbung schließen.

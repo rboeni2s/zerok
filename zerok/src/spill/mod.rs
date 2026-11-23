@@ -5,8 +5,8 @@ pub mod liveness;
 pub mod reg_helper;
 
 
-/// Newtypes um usize hier, damit nicht für color, register nummern und instruction indexe überall usize
-/// steht und ich vergesse was gemeint ist...
+// Newtypes um usize hier, damit nicht für color, register nummern und instruction indexe überall usize
+// steht und ich vergesse was gemeint ist...
 
 /// The number of a (virtual) R register of a function
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -33,12 +33,13 @@ impl std::fmt::Display for RegNum
 pub use cfg::split_functions;
 pub use intf_graph::{
     FloatNode,
-    IntNode,
+    GprNode,
     IntfEdge,
     IntfEntries,
     IntfGraph,
     IntfNode,
     NodeColor,
+    NodeId,
     RegClass,
     build_interference_graph,
     neighbours,

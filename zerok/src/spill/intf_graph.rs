@@ -2,7 +2,7 @@ mod graph_setup;
 
 use crate::{
     annotator::{EnvEntry, Kind},
-    spill::{Liveness, RegNum, cfg::CfgRegs, reg_helper::GetRegR},
+    spill::{Liveness, RegNum, arch::Arch, cfg::CfgRegs, reg_helper::GetRegR},
 };
 use ir::IrChunk;
 use std::collections::HashMap;
@@ -10,19 +10,17 @@ use std::collections::HashMap;
 pub use graph_setup::*;
 
 
-/// Determines the register class of every register in `chunks`.
+/// Determines the register class of every register in `chunks` on architecture `A`.
 ///
-/// ## Registers without a class are not part of the map:
-/// - registers of kind `none`, they carry no data
-/// - registers that are read but never written (the codegen reads the never written value
-///   register of `none` expressions, e.g. a block ending with `;` as the body of an `if`)
-pub fn register_classes(chunks: &[IrChunk<EnvEntry, Kind>]) -> HashMap<RegNum, RegClass>
+/// The class depends on the architecture, not only on the kind of the value: on a soft-float
+/// architecture floats live in the general purpose registers (see [`Arch::class_of`]).
+pub fn register_classes<A: Arch>(chunks: &[IrChunk<EnvEntry, Kind>]) -> HashMap<RegNum, RegClass>
 {
     let mut classes = HashMap::new();
 
     for (reg, kind) in chunks.iter().flat_map(|c| c.cfg_def_kinds())
     {
-        let Some(class) = RegClass::of(kind)
+        let Some(class) = A::class_of(kind)
         else
         {
             continue;
@@ -41,15 +39,16 @@ pub fn register_classes(chunks: &[IrChunk<EnvEntry, Kind>]) -> HashMap<RegNum, R
 }
 
 
-/// Builds the interference graph of a single function from its liveness.
+/// Builds the interference graph of a single function from its liveness for architecture `A`.
 ///
-/// Every register becomes a node of the type of its class ([`IntNode`] or [`FloatNode`]). Edges
-/// only connect registers of the same class, registers of different classes never share a machine
-/// register anyway. Registers without a class (see [`register_classes`]) get no node and no edges.
-pub fn build_interference_graph(liveness: &Liveness) -> graph_setup::IntfGraph
+/// Every register becomes a node of the type of its class on `A` ([`GprNode`] or [`FloatNode`]).
+/// Edges only connect registers of the same class, registers of different classes never share a
+/// machine register anyway. Registers without a class (see [`register_classes`]) get no node and
+/// no edges.
+pub fn build_interference_graph<A: Arch>(liveness: &Liveness) -> graph_setup::IntfGraph
 {
     let chunks = liveness.chunks();
-    let classes = register_classes(chunks);
+    let classes = register_classes::<A>(chunks);
     let mut graph = graph_setup::IntfGraph::default();
 
     let class_of = |reg: RegNum| classes.get(&reg).copied();
@@ -59,7 +58,9 @@ pub fn build_interference_graph(liveness: &Liveness) -> graph_setup::IntfGraph
     let add_edge = |graph: &IntfGraph, a: RegNum, b: RegNum, edge: IntfEdge| {
         if a != b && class_of(a).is_some() && class_of(a) == class_of(b)
         {
-            graph.any_link(a.min(b), edge).add(&a.max(b));
+            graph
+                .any_link(NodeId::Virt(a.min(b)), edge)
+                .add(&NodeId::Virt(a.max(b)));
         }
     };
 
@@ -74,7 +75,7 @@ pub fn build_interference_graph(liveness: &Liveness) -> graph_setup::IntfGraph
         {
             match class_of(reg)
             {
-                Some(RegClass::Gpr) => graph.insert(IntNode::new(reg)),
+                Some(RegClass::Gpr) => graph.insert(GprNode::new(reg)),
                 Some(RegClass::Float) => graph.insert(FloatNode::new(reg)),
                 None => None,
             };

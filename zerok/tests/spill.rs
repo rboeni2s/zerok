@@ -5,18 +5,21 @@ use std::collections::{BTreeSet, HashMap};
 use zerok::annotator::{EnvEntry, Kind};
 use zerok::parser::atom::Atom;
 use zerok::spill::cfg::{CfgRegs, cfg_successors, split_functions};
+use zerok::spill::arch::target::{SysV64, SysV64Gpr};
+use zerok::spill::arch::{Arch, EmptyFile, ParamLoc};
 use zerok::spill::intf_graph::register_classes;
 use zerok::spill::{
+    CmdIdx,
+    Color,
     FloatNode,
-    IntNode,
+    GprNode,
     IntfEdge,
     IntfEntries,
     IntfGraph,
     IntfNode,
     Liveness,
-    CmdIdx,
-    Color,
     NodeColor,
+    NodeId,
     RegClass,
     RegNum,
     build_interference_graph,
@@ -104,24 +107,38 @@ fn loop_chunks() -> Vec<IrChunk<EnvEntry, Kind>>
     ]
 }
 
+/// Der schlüssel des virtuellen registers `reg`
+fn v(reg: usize) -> NodeId
+{
+    NodeId::Virt(RegNum(reg))
+}
+
+/// Die virtuellen register von `ids`, bricht ab, wenn ein maschinenregister dabei ist
+fn virt(ids: impl IntoIterator<Item = NodeId>) -> BTreeSet<RegNum>
+{
+    ids.into_iter()
+        .map(|id| id.virt().expect("only virtual registers expected"))
+        .collect()
+}
+
 fn interferes(graph: &IntfGraph, reg: usize) -> BTreeSet<RegNum>
 {
-    neighbours::<IntNode>(graph, RegNum(reg), IntfEdge::Interferes).collect()
+    virt(neighbours::<GprNode>(graph, v(reg), IntfEdge::Interferes))
 }
 
 fn move_partners(graph: &IntfGraph, reg: usize) -> BTreeSet<RegNum>
 {
-    neighbours::<IntNode>(graph, RegNum(reg), IntfEdge::Move).collect()
+    virt(neighbours::<GprNode>(graph, v(reg), IntfEdge::Move))
 }
 
 fn nodes<N: IntfNode>(graph: &IntfGraph) -> BTreeSet<RegNum>
 {
-    graph.variants::<N>().map(|n| *n.ident_ref()).collect()
+    virt(graph.variants::<N>().map(|n| n.id()))
 }
 
 fn graph_of(chunks: &[IrChunk<EnvEntry, Kind>]) -> IntfGraph
 {
-    build_interference_graph(&Liveness::new(chunks))
+    build_interference_graph::<SysV64>(&Liveness::new(chunks))
 }
 
 
@@ -155,7 +172,10 @@ fn cfg_use_def()
         args: vec![tr(1), trk(2, Kind::F64)],
     };
     assert!(func.cfg_use().is_empty());
-    assert_eq!(func.cfg_def_kinds(), vec![(RegNum(1), Kind::I64), (RegNum(2), Kind::F64)]);
+    assert_eq!(
+        func.cfg_def_kinds(),
+        vec![(RegNum(1), Kind::I64), (RegNum(2), Kind::F64)]
+    );
 }
 
 
@@ -242,7 +262,7 @@ fn register_classes_by_kind()
     ];
 
     assert_eq!(
-        register_classes(&chunks),
+        register_classes::<SysV64>(&chunks),
         HashMap::from([
             (RegNum(1), RegClass::Gpr),
             (RegNum(2), RegClass::Float),
@@ -398,17 +418,18 @@ fn interference_classes()
 
     let graph = graph_of(&chunks);
 
-    assert_eq!(nodes::<IntNode>(&graph), set(&[1, 3, 5]));
+    assert_eq!(nodes::<GprNode>(&graph), set(&[1, 3, 5]));
     assert_eq!(nodes::<FloatNode>(&graph), set(&[2, 4]));
 
     // Die float register R2 und R4 leben gleichzeitig und interferieren
-    let float_neighbours =
-        |reg| neighbours::<FloatNode>(&graph, RegNum(reg), IntfEdge::Interferes).collect::<BTreeSet<_>>();
+    let float_neighbours = |reg| {
+        virt(neighbours::<FloatNode>(&graph, v(reg), IntfEdge::Interferes))
+    };
     assert_eq!(float_neighbours(2), set(&[4]));
     assert_eq!(float_neighbours(4), set(&[2]));
 
     // Zwischen den klassen gibt es keine kanten, obwohl z.b. R2 und R3 gleichzeitig leben
-    for reg in (1..=5).map(RegNum)
+    for reg in (1..=5).map(v)
     {
         assert!(
             graph
@@ -417,7 +438,7 @@ fn interference_classes()
                 .all(|n| {
                     matches!(
                         (graph.get_entry(reg).unwrap(), n),
-                        (IntfEntries::IntNode(_), IntfEntries::IntNode(_))
+                        (IntfEntries::GprNode(_), IntfEntries::GprNode(_))
                             | (IntfEntries::FloatNode(_), IntfEntries::FloatNode(_))
                     )
                 })
@@ -441,28 +462,34 @@ fn interference_node_color()
     let mut graph = graph_of(&chunks);
 
     assert_eq!(
-        graph.get::<IntNode>(RegNum(1)).unwrap().color(),
+        graph.get::<GprNode>(v(1)).unwrap().color(),
         NodeColor::Uncolored
     );
     assert_eq!(
-        graph.get::<FloatNode>(RegNum(2)).unwrap().color(),
+        graph.get::<FloatNode>(v(2)).unwrap().color(),
         NodeColor::Uncolored
     );
 
     graph
-        .get_mut::<IntNode>(RegNum(1))
+        .get_mut::<GprNode>(v(1))
         .unwrap()
         .set_color(NodeColor::Colored(Color(3)));
     graph
-        .get_mut::<FloatNode>(RegNum(2))
+        .get_mut::<FloatNode>(v(2))
         .unwrap()
         .set_color(NodeColor::Precolored(Color(0)));
 
-    assert_eq!(graph.get::<IntNode>(RegNum(1)).unwrap().color().color(), Some(Color(3)));
-    assert_eq!(graph.get::<FloatNode>(RegNum(2)).unwrap().color().color(), Some(Color(0)));
+    assert_eq!(
+        graph.get::<GprNode>(v(1)).unwrap().color().color(),
+        Some(Color(3))
+    );
+    assert_eq!(
+        graph.get::<FloatNode>(v(2)).unwrap().color().color(),
+        Some(Color(0))
+    );
 
     // Der knotentyp muss zur klasse passen
-    assert!(graph.get::<FloatNode>(RegNum(1)).is_none());
+    assert!(graph.get::<FloatNode>(v(1)).is_none());
 }
 
 
@@ -495,9 +522,9 @@ fn split_functions_at_func()
     assert_eq!(funcs[1], &chunks[2..5]);
 
     // R256 ist in f ein int, in g ein float: pro funktion analysiert gibt es keinen konflikt
-    let f = build_interference_graph(&Liveness::new(funcs[0]));
-    let g = build_interference_graph(&Liveness::new(funcs[1]));
-    assert_eq!(nodes::<IntNode>(&f), set(&[256]));
+    let f = build_interference_graph::<SysV64>(&Liveness::new(funcs[0]));
+    let g = build_interference_graph::<SysV64>(&Liveness::new(funcs[1]));
+    assert_eq!(nodes::<GprNode>(&f), set(&[256]));
     assert_eq!(nodes::<FloatNode>(&g), set(&[256, 257]));
 }
 
@@ -525,14 +552,121 @@ fn interference_ignores_none_registers()
         IrChunk::Ret { val: r(2) },
     ];
 
-    let classes = register_classes(&chunks);
+    let classes = register_classes::<SysV64>(&chunks);
     assert_eq!(classes.get(&RegNum(3)), None);
     assert_eq!(classes.get(&RegNum(4)), None);
 
     let graph = graph_of(&chunks);
 
     // Nur R1 und R2 brauchen ein register
-    assert_eq!(nodes::<IntNode>(&graph), set(&[1, 2]));
-    assert!(graph.get_entry(RegNum(3)).is_none());
-    assert!(graph.get_entry(RegNum(4)).is_none());
+    assert_eq!(nodes::<GprNode>(&graph), set(&[1, 2]));
+    assert!(graph.get_entry(v(3)).is_none());
+    assert!(graph.get_entry(v(4)).is_none());
+}
+
+
+/// Eine soft-float architektur: floats liegen in den allgemeinen registern,
+/// eigene float register gibt es nicht
+struct SoftFloat;
+
+impl Arch for SoftFloat
+{
+    type Gpr = SysV64Gpr;
+    type Float = EmptyFile;
+
+    fn class_of(kind: Kind) -> Option<RegClass>
+    {
+        match kind
+        {
+            Kind::None => None,
+            _ => Some(RegClass::Gpr),
+        }
+    }
+
+    fn param_loc(_params: &[RegClass]) -> Vec<ParamLoc>
+    {
+        unimplemented!("not needed for the graph")
+    }
+}
+
+
+/// f(R1: i64, R2: f64): return g(R1, R2)
+/// -- auf soft-float landen floats in der gpr-datei und interferieren mit den ints
+#[test]
+fn interference_classes_by_arch()
+{
+    let chunks = vec![
+        IrChunk::Func {
+            name: "f".into(),
+            args: vec![trk(1, Kind::I64), trk(2, Kind::F64)],
+        },
+        IrChunk::Call {
+            name: "g".into(),
+            args: vec![r(1), r(2)],
+            reg: trk(3, Kind::I64),
+        },
+        IrChunk::Ret { val: r(3) },
+    ];
+
+    let liveness = Liveness::new(&chunks);
+
+    // x86-64: getrennte dateien, keine kante zwischen R1 und R2
+    let sysv = build_interference_graph::<SysV64>(&liveness);
+    assert_eq!(nodes::<GprNode>(&sysv), set(&[1, 3]));
+    assert_eq!(nodes::<FloatNode>(&sysv), set(&[2]));
+    assert!(interferes(&sysv, 1).is_empty());
+
+    // Soft-float: alles in einer datei, R1 und R2 leben gleichzeitig und interferieren
+    assert_eq!(
+        register_classes::<SoftFloat>(&chunks),
+        HashMap::from([
+            (RegNum(1), RegClass::Gpr),
+            (RegNum(2), RegClass::Gpr),
+            (RegNum(3), RegClass::Gpr),
+        ])
+    );
+
+    let soft = build_interference_graph::<SoftFloat>(&liveness);
+    assert_eq!(nodes::<GprNode>(&soft), set(&[1, 2, 3]));
+    assert!(nodes::<FloatNode>(&soft).is_empty());
+    assert_eq!(interferes(&soft, 1), set(&[2]));
+    assert_eq!(interferes(&soft, 2), set(&[1]));
+}
+
+
+/// Maschinenregister haben eigene schlüssel: sie kollidieren weder mit virtuellen registern
+/// noch mit maschinenregistern anderer klassen, die dieselbe farbe haben
+#[test]
+fn phys_nodes()
+{
+    let mut graph = IntfGraph::default();
+
+    graph.insert(GprNode::new(RegNum(0)));
+    graph.insert(GprNode::phys(Color(0)));
+    graph.insert(FloatNode::phys(Color(0)));
+
+    // Drei verschiedene knoten, obwohl überall die 0 drin steckt
+    assert_eq!(graph.iter().count(), 3);
+
+    let rax = graph
+        .get::<GprNode>(NodeId::Phys(RegClass::Gpr, Color(0)))
+        .unwrap();
+    let xmm0 = graph
+        .get::<FloatNode>(NodeId::Phys(RegClass::Float, Color(0)))
+        .unwrap();
+
+    // Ein maschinenregister ist mit seiner eigenen farbe vorgefärbt
+    assert_eq!(rax.color(), NodeColor::Precolored(Color(0)));
+    assert_eq!(xmm0.color(), NodeColor::Precolored(Color(0)));
+
+    // Die klasse im schlüssel ist immer die des knotentyps
+    assert_eq!(rax.id(), NodeId::Phys(GprNode::CLASS, Color(0)));
+    assert_eq!(xmm0.id(), NodeId::Phys(FloatNode::CLASS, Color(0)));
+    assert_eq!(rax.id().virt(), None);
+
+    // Das virtuelle register R0 ist ein eigener, ungefärbter knoten
+    let r0 = graph.get::<GprNode>(v(0)).unwrap();
+    assert_eq!(r0.color(), NodeColor::Uncolored);
+    assert_eq!(r0.id().virt(), Some(RegNum(0)));
+    assert_eq!(NodeId::from(RegNum(0)), v(0));
 }

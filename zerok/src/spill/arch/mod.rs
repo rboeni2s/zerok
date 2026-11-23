@@ -35,7 +35,7 @@ pub trait RegFile
     /// Array of _callee_ saved registers, each entry must also appear in `Self::USEABLE`
     const CALLEE_SAVED: &'static [Self::Reg];
 
-    /// Return register, must also appear in `Self::Useable`
+    /// Return register, must also appear in `Self::USEABLE` (except for an [`EmptyFile`])
     const RETURN: Self::Reg;
 
     /// Scratch register for spill code.
@@ -53,6 +53,35 @@ pub trait RegFile
     {
         Self::USEABLE.iter().position(|&r| r == reg).map(Color)
     }
+}
+
+
+/// Placeholder register file for a class the architecture has no registers for,
+/// e.g. `Arch::Float` on a soft-float architecture.
+///
+/// The file has no useable registers (`COLORS == 0`). `Arch::class_of` of such an architecture
+/// must never return the class of this file, so there are no nodes of this class and the
+/// coloring never needs one of its colors.
+///
+/// `RETURN` and `SCRATCH` only exist because the trait requires them: they are
+/// [`EmptyFile::Placeholder`], which is no real register and has no color.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EmptyFile
+{
+    /// Stands for a register that does not exist
+    Placeholder,
+}
+
+
+impl RegFile for EmptyFile
+{
+    type Reg = Self;
+
+    const USEABLE: &'static [Self] = &[];
+    const CALLER_SAVED: &'static [Self] = &[];
+    const CALLEE_SAVED: &'static [Self] = &[];
+    const RETURN: Self = Self::Placeholder;
+    const SCRATCH: Self = Self::Placeholder;
 }
 
 

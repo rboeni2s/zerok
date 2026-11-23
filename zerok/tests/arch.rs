@@ -2,8 +2,8 @@
 
 use zerok::annotator::Kind;
 use zerok::spill::arch::target::{SysV64, SysV64Gpr, SysV64Xmm};
-use zerok::spill::arch::{Arch, ParamLoc, RegFile};
-use zerok::spill::{Color, RegClass};
+use zerok::spill::arch::{Arch, EmptyFile, ParamLoc, RegFile};
+use zerok::spill::{Color, FloatNode, GprNode, IntfNode, RegClass};
 
 
 /// Checks the documented invariants of a register file
@@ -141,4 +141,50 @@ fn sysv64_param_loc()
             "Stack(1)"
         ]
     );
+}
+
+
+/// The register file of node type `N` on architecture `A`
+type FileOf<N, A> = <N as IntfNode>::File<A>;
+
+
+/// The colors of a node type are the colors of its register file
+fn colors<A: Arch, N: IntfNode>() -> usize
+{
+    <N::File<A> as RegFile>::COLORS
+}
+
+
+#[test]
+fn sysv64_node_files()
+{
+    // Kompiliert nur, wenn der knotentyp die richtige registerdatei auswählt
+    let gpr: FileOf<GprNode, SysV64> = SysV64Gpr::Rax;
+    let xmm: FileOf<FloatNode, SysV64> = SysV64Xmm::Xmm0;
+
+    assert_eq!(colors::<SysV64, GprNode>(), SysV64Gpr::COLORS);
+    assert_eq!(colors::<SysV64, FloatNode>(), SysV64Xmm::COLORS);
+
+    // Farbe → register läuft über den knotentyp
+    assert_eq!(FileOf::<GprNode, SysV64>::reg_of(Color(0)), gpr);
+    assert_eq!(FileOf::<FloatNode, SysV64>::reg_of(Color(0)), xmm);
+    assert_eq!(FileOf::<GprNode, SysV64>::RETURN, SysV64Gpr::Rax);
+    assert_eq!(FileOf::<FloatNode, SysV64>::RETURN, SysV64Xmm::Xmm0);
+
+    // Klasse des knotentyps und klasse aus der architektur passen zusammen
+    assert_eq!(SysV64::class_of(Kind::I64), Some(GprNode::CLASS));
+    assert_eq!(SysV64::class_of(Kind::F64), Some(FloatNode::CLASS));
+}
+
+
+#[test]
+fn empty_file()
+{
+    assert_eq!(EmptyFile::COLORS, 0);
+    assert!(EmptyFile::CALLER_SAVED.is_empty());
+    assert!(EmptyFile::CALLEE_SAVED.is_empty());
+
+    // Der platzhalter ist kein echtes register und hat keine farbe
+    assert_eq!(EmptyFile::color_of(EmptyFile::RETURN), None);
+    assert_eq!(EmptyFile::color_of(EmptyFile::SCRATCH), None);
 }
