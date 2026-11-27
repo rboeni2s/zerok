@@ -11,7 +11,13 @@ use crate::{
     annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
     reg_util::{self, FnReserved, GbReserved},
-    spill::{Liveness, arch::target::SysV64, build_interference_graph, split_functions},
+    spill::{
+        Liveness,
+        arch::target::SysV64,
+        build_interference_graph,
+        intf_graph::precolor,
+        split_functions,
+    },
     symbol::Symbol,
 };
 use iic_quote::iic_quote;
@@ -64,7 +70,8 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
     {
         let liveness = Liveness::new(func);
         // TODO: Architektur auswahl via cli
-        let _graph = build_interference_graph::<SysV64>(&liveness);
+        let mut graph = build_interference_graph::<SysV64>(&liveness);
+        precolor::<SysV64>(&mut graph, &liveness);
     }
 
     raw_ir
@@ -120,10 +127,13 @@ impl<'a> GenEnv<'_, 'a>
 
                 match self.env.get_unchecked(annotation.cell)
                 {
-                    EnvEntry::Register(reg) => IrTypedReg {
-                        reg: IrReg::R(reg),
-                        kind: annotation.kind,
-                    },
+                    EnvEntry::Register(reg) =>
+                    {
+                        IrTypedReg {
+                            reg: IrReg::R(reg),
+                            kind: annotation.kind,
+                        }
+                    }
                     EnvEntry::Atom(_) | EnvEntry::Global(_) | EnvEntry::Label(_) =>
                     {
                         unreachable!("Parameters are always stored in R registers")

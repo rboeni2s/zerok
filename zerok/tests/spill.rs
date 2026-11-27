@@ -5,9 +5,9 @@ use std::collections::{BTreeSet, HashMap};
 use zerok::annotator::{EnvEntry, Kind};
 use zerok::parser::atom::Atom;
 use zerok::spill::cfg::{CfgRegs, cfg_successors, split_functions};
-use zerok::spill::arch::target::{SysV64, SysV64Gpr};
-use zerok::spill::arch::{Arch, EmptyFile, ParamLoc};
-use zerok::spill::intf_graph::register_classes;
+use zerok::spill::arch::target::{SysV64, SysV64Gpr, SysV64Xmm};
+use zerok::spill::arch::{Arch, EmptyFile, ParamLoc, RegFile};
+use zerok::spill::intf_graph::{precolor, register_classes};
 use zerok::spill::{
     CmdIdx,
     Color,
@@ -669,4 +669,196 @@ fn phys_nodes()
     assert_eq!(r0.color(), NodeColor::Uncolored);
     assert_eq!(r0.id().virt(), Some(RegNum(0)));
     assert_eq!(NodeId::from(RegNum(0)), v(0));
+}
+
+
+// --- Vorfärbung ---
+
+
+/// Interferenzgraph von `chunks` inklusive vorfärbung (SysV64)
+fn precolored_graph_of(chunks: &[IrChunk<EnvEntry, Kind>]) -> IntfGraph
+{
+    let liveness = Liveness::new(chunks);
+    let mut graph = build_interference_graph::<SysV64>(&liveness);
+    precolor::<SysV64>(&mut graph, &liveness);
+    graph
+}
+
+fn gpr(reg: SysV64Gpr) -> NodeId
+{
+    NodeId::Phys(RegClass::Gpr, SysV64Gpr::color_of(reg).unwrap())
+}
+
+fn xmm(reg: SysV64Xmm) -> NodeId
+{
+    NodeId::Phys(RegClass::Float, SysV64Xmm::color_of(reg).unwrap())
+}
+
+/// Alle maschinenregister, mit denen `reg` über eine kante vom typ `edge` verbunden ist
+fn phys_partners<N: IntfNode>(graph: &IntfGraph, reg: usize, edge: IntfEdge) -> BTreeSet<NodeId>
+{
+    neighbours::<N>(graph, v(reg), edge)
+        .filter(|id| id.virt().is_none())
+        .collect()
+}
+
+
+/// Jede verwendbare farbe jeder klasse bekommt genau einen, mit sich selbst vorgefärbten knoten
+#[test]
+fn precolor_phys_nodes()
+{
+    let chunks = vec![IrChunk::Func {
+        name: "f".into(),
+        args: vec![],
+    }];
+
+    let graph = precolored_graph_of(&chunks);
+
+    for c in 0..SysV64Gpr::COLORS
+    {
+        let node = graph
+            .get::<GprNode>(NodeId::Phys(RegClass::Gpr, Color(c)))
+            .unwrap();
+        assert_eq!(node.color(), NodeColor::Precolored(Color(c)));
+    }
+
+    for c in 0..SysV64Xmm::COLORS
+    {
+        let node = graph
+            .get::<FloatNode>(NodeId::Phys(RegClass::Float, Color(c)))
+            .unwrap();
+        assert_eq!(node.color(), NodeColor::Precolored(Color(c)));
+    }
+
+    assert_eq!(graph.iter().count(), SysV64Gpr::COLORS + SysV64Xmm::COLORS);
+}
+
+
+/// f(R1: i64, R2: f64, R3: i64, R4..R9: i64)
+/// -- gpr und float zählen getrennt, ab dem 7. gpr parameter geht es auf den stack
+#[test]
+fn precolor_func_params()
+{
+    let mut args = vec![trk(1, Kind::I64), trk(2, Kind::F64), trk(3, Kind::I64)];
+    args.extend((4..=9).map(tr));
+
+    let chunks = vec![
+        IrChunk::Func {
+            name: "f".into(),
+            args,
+        },
+        IrChunk::Label { name: "L".into() },
+    ];
+
+    let graph = precolored_graph_of(&chunks);
+    let hint = |reg| phys_partners::<GprNode>(&graph, reg, IntfEdge::Move);
+
+    assert_eq!(hint(1), BTreeSet::from([gpr(SysV64Gpr::Rdi)]));
+    assert_eq!(
+        phys_partners::<FloatNode>(&graph, 2, IntfEdge::Move),
+        BTreeSet::from([xmm(SysV64Xmm::Xmm0)])
+    );
+    assert_eq!(hint(3), BTreeSet::from([gpr(SysV64Gpr::Rsi)]));
+    assert_eq!(hint(7), BTreeSet::from([gpr(SysV64Gpr::R9)]));
+
+    // Stack parameter
+    assert!(hint(8).is_empty());
+    assert!(hint(9).is_empty());
+
+    // Die kante ist auch vom maschinenregister aus sichtbar
+    assert_eq!(
+        virt(neighbours::<GprNode>(&graph, gpr(SysV64Gpr::Rdi), IntfEdge::Move)),
+        set(&[1])
+    );
+}
+
+
+/// f(R1): R2 = g(R1); R3 = R1 + R2; return R3
+/// -- R1 lebt über den call und darf in keinem caller-saved register liegen
+#[test]
+fn precolor_call()
+{
+    let chunks = vec![
+        /* 0 */
+        IrChunk::Func {
+            name: "f".into(),
+            args: vec![tr(1)],
+        },
+        /* 1 */
+        IrChunk::Call {
+            name: "g".into(),
+            args: vec![r(1)],
+            reg: tr(2),
+        },
+        /* 2 */
+        IrChunk::Bin {
+            op: IrOp::Add,
+            lhs: r(1),
+            rhs: r(2),
+            reg: tr(3),
+        },
+        /* 3 */ IrChunk::Ret { val: r(3) },
+    ];
+
+    let graph = precolored_graph_of(&chunks);
+
+    // Clobber: R1 interferiert mit allen caller-saved und mit keinem callee-saved register
+    let caller_saved = SysV64Gpr::CALLER_SAVED.iter().map(|&reg| gpr(reg)).collect();
+    assert_eq!(phys_partners::<GprNode>(&graph, 1, IntfEdge::Interferes), caller_saved);
+
+    // Das ergebnis wird vom call selbst geschrieben, lebt also nicht über ihn hinweg
+    assert!(phys_partners::<GprNode>(&graph, 2, IntfEdge::Interferes).is_empty());
+
+    // Hinweise: R1 ist parameter von f und argument von g (beide male rdi),
+    // R2 kommt in rax zurück, R3 wird in rax zurückgegeben
+    assert_eq!(
+        phys_partners::<GprNode>(&graph, 1, IntfEdge::Move),
+        BTreeSet::from([gpr(SysV64Gpr::Rdi)])
+    );
+    assert_eq!(
+        phys_partners::<GprNode>(&graph, 2, IntfEdge::Move),
+        BTreeSet::from([gpr(SysV64Gpr::Rax)])
+    );
+    assert_eq!(
+        phys_partners::<GprNode>(&graph, 3, IntfEdge::Move),
+        BTreeSet::from([gpr(SysV64Gpr::Rax)])
+    );
+}
+
+
+/// f(R1: f64): R2 = g(1, 2.0, R1); return R2
+/// -- literale haben kein register, zählen aber für die positionen der argumente mit
+#[test]
+fn precolor_call_literal_args()
+{
+    let chunks = vec![
+        IrChunk::Func {
+            name: "f".into(),
+            args: vec![trk(1, Kind::F64)],
+        },
+        IrChunk::Call {
+            name: "g".into(),
+            args: vec![
+                EnvEntry::Atom(Atom::Int(1)),
+                EnvEntry::Atom(Atom::Float(2.0)),
+                r(1),
+            ],
+            reg: trk(2, Kind::F64),
+        },
+        IrChunk::Ret { val: r(2) },
+    ];
+
+    let graph = precolored_graph_of(&chunks);
+
+    // R1 ist parameter von f (xmm0) und das zweite float argument von g (xmm1)
+    assert_eq!(
+        phys_partners::<FloatNode>(&graph, 1, IntfEdge::Move),
+        BTreeSet::from([xmm(SysV64Xmm::Xmm0), xmm(SysV64Xmm::Xmm1)])
+    );
+
+    // Float ergebnis und rückgabewert liegen in xmm0
+    assert_eq!(
+        phys_partners::<FloatNode>(&graph, 2, IntfEdge::Move),
+        BTreeSet::from([xmm(SysV64Xmm::Xmm0)])
+    );
 }

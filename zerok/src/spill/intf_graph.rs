@@ -1,21 +1,16 @@
 mod graph_setup;
+mod precolor;
 
 
 use crate::{
     annotator::{EnvEntry, Kind},
-    spill::{
-        Color,
-        Liveness,
-        RegNum,
-        arch::{Arch, ParamLoc, RegFile},
-        cfg::CfgRegs,
-        reg_helper::GetRegR,
-    },
+    spill::{Liveness, RegNum, arch::Arch, cfg::CfgRegs, reg_helper::GetRegR},
 };
 use ir::IrChunk;
 use std::collections::HashMap;
 
 pub use graph_setup::*;
+pub use precolor::precolor;
 
 
 /// Determines the register class of every register in `chunks` on architecture `A`.
@@ -136,87 +131,4 @@ pub fn build_interference_graph<A: Arch>(liveness: &Liveness) -> graph_setup::In
     }
 
     graph
-}
-
-
-/// Precolors the graph.
-///
-/// Marker machine-registers are added to control the pre coloring:
-/// * Some pre-colorings are treated as a preference or hint. They are connected to the
-///   machine-register node of their respective coloring through a _move_ edge.
-///
-/// * Some other pre-colorings are negative constraints (not a hint) like caller saved registers.
-///   Their nodes are connected using a _interference_ edge the node of a physical register
-///   to prevent them from being colored in that color.
-pub fn precolor<A: Arch>(graph: &mut IntfGraph, liveness: &Liveness)
-{
-    let chunks = liveness.chunks();
-    let classes = register_classes::<A>(&chunks);
-
-    /// inserts a node for every physical register in the regfile into the graph
-    fn insert_phys<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
-    {
-        for c in 0..<N::File<A> as RegFile>::COLORS
-        {
-            graph.insert(N::phys(Color(c)));
-        }
-    }
-
-    // registersätze für float und gpr register einfügen
-    insert_phys::<A, GprNode>(graph);
-    insert_phys::<A, FloatNode>(graph); // Architekturen ohne zb separate float register machen hier nix, da N=0...
-
-    // Now go over every instruction (chunk) and precolor its registers if needed
-    for (n, chunk) in chunks.iter().enumerate()
-    {
-        match chunk
-        {
-            IrChunk::Func { args, .. } =>
-            {
-                // Get the (virtual) register numbers and register class of each function parameter
-                let params: Vec<(Option<RegNum>, RegClass)> = args
-                    .iter()
-                    .filter_map(|arg| Some((arg.get_r_reg_of(), A::class_of(arg.kind)?)))
-                    .collect();
-
-                // Fetch the register and stack positions for each function parameters from the architecture...
-                let param_locations = {
-                    let classes = params.iter().map(|&(_, class)| class).collect::<Vec<_>>();
-                    A::param_loc(&classes)
-                };
-
-                for ((reg, _), loc) in params.iter().zip(&param_locations)
-                {
-                    // Skip the pre-coloring for arguments passed on the stack
-                    // Arguments not passed via the satck should have:
-                    // * reg: the virtual register number
-                    // * class: the register class of the virtual register (float, gpr, ...)
-                    // * color: the index of the machine register that the calling convention wants this parameters to have
-                    let (Some(reg), ParamLoc::Reg { class, color }) = (reg, loc)
-                    else
-                    {
-                        continue;
-                    };
-
-                    // Add a move-edge between the virtual register and the physical register suggested by the architecture.
-                    graph
-                        .any_link(NodeId::Virt(*reg), IntfEdge::Move)
-                        .add(&NodeId::Phys(*class, *color));
-                }
-            }
-
-            IrChunk::Call { name, args, reg } =>
-            {
-                todo!();
-            }
-
-            IrChunk::Ret { val } =>
-            {
-                todo!();
-            }
-
-            // All other chunks do not have registers that would need precoloring
-            _ => (),
-        }
-    }
 }
