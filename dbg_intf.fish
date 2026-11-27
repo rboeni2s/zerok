@@ -1,2 +1,2 @@
 #!/usr/bin/env fish
-dot -Tpng $argv[1] >debug/graph.png && gwenview debug/graph.png
+dot -Tsvg $argv[1] >debug/graph.svg && gwenview debug/graph.svg
