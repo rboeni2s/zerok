@@ -5,7 +5,16 @@ use ir::IrChunk;
 
 use crate::annotator::{EnvEntry, Kind};
 use crate::spill::arch::{Arch, RegFile};
-use crate::spill::{FloatNode, GprNode, IntfEdge, IntfGraph, IntfNode, NodeColor, NodeId};
+use crate::spill::{
+    FloatNode,
+    GprNode,
+    IntfEdge,
+    IntfGraph,
+    IntfNode,
+    NodeColor,
+    NodeId,
+    RegClass,
+};
 
 
 const DEFAULT_DEBUG_OUT_DIR: &str = "debug";
@@ -13,22 +22,38 @@ const DEFAULT_DEBUG_OUT_DIR: &str = "debug";
 
 /// Background colors of the nodes in the dot output, indexed by the color of a node.
 const DOT_COLORS: &[&str] = &[
-    "lightblue",
-    "lightcoral",
-    "palegreen",
+    "gold",
+    "deepskyblue",
+    "tomato",
+    "limegreen",
+    "orchid",
+    "darkorange",
+    "turquoise",
+    "hotpink",
+    "yellowgreen",
+    "mediumpurple",
     "khaki",
+    "lightcoral",
+    "cadetblue",
+    "sandybrown",
+    "palegreen",
     "plum",
-    "lightsalmon",
-    "aquamarine",
-    "lightpink",
-    "wheat",
-    "lightskyblue",
+    "lightblue",
+    "salmon",
     "darkseagreen",
     "thistle",
-    "lightgoldenrod",
-    "paleturquoise",
-    "burlywood",
+    "wheat",
+    "aquamarine",
+    "lightpink",
     "lightsteelblue",
+    "burlywood",
+    "greenyellow",
+    "lightskyblue",
+    "rosybrown",
+    "paleturquoise",
+    "lavender",
+    "lightgoldenrod",
+    "mediumaquamarine",
 ];
 
 
@@ -62,32 +87,34 @@ pub fn save_graph_as_dot<A: Arch>(name: impl std::fmt::Display, graph: &IntfGrap
     let mut file = BufWriter::new(std::fs::File::create(file_name)?);
 
     writeln!(file, "graph \"{name}\" {{")?;
-    writeln!(file, "    node [shape=circle];")?;
 
-    // Knoten, pro registersatz ein cluster
+    // graphviz settings
+    writeln!(file, "    layout=neato;")?;
+    writeln!(file, "    overlap=false;")?;
+    writeln!(file, "    splines=true;")?;
+    writeln!(file, "    sep=\"+6\";")?;
+
+    // Draw one graph per featured register file of the architecture
     write_class::<A, GprNode>(&mut file, graph)?;
     write_class::<A, FloatNode>(&mut file, graph)?;
 
-    // Kanten. Jede ungerichtete kante ist genau einmal (min → max) gespeichert,
-    // `ids` liefert also jede kante genau einmal. Sortiert, damit die ausgabe stabil bleibt.
     let mut keys: Vec<NodeId> = graph.iter().map(|(&key, _)| key).collect();
     keys.sort();
 
+    // Loop over every edge and set its style to either dashed (move) or solid (interferes)
     for &from in &keys
     {
-        for (edge, style) in [(IntfEdge::Interferes, "solid"), (IntfEdge::Move, "dashed")]
+        for (edge, style) in [
+            (IntfEdge::Interferes, "style=solid"),
+            (IntfEdge::Move, "style=dashed, color=blue, penwidth=2"),
+        ]
         {
             let mut targets: Vec<NodeId> = graph.any_link(from, edge).ids().collect();
             targets.sort();
 
             for to in targets
             {
-                writeln!(
-                    file,
-                    "    {} -- {} [style={style}];",
-                    dot_id(from),
-                    dot_id(to)
-                )?;
+                writeln!(file, "    {} -- {} [{style}];", dot_id(from), dot_id(to))?;
             }
         }
     }
@@ -97,23 +124,25 @@ pub fn save_graph_as_dot<A: Arch>(name: impl std::fmt::Display, graph: &IntfGrap
 }
 
 
-/// Writes all nodes of type `N` as one cluster
+/// Writes all nodes of type `N`, in the shape of their class
 fn write_class<A: Arch, N: IntfNode>(out: &mut impl Write, graph: &IntfGraph) -> Result<()>
 {
-    let mut nodes: Vec<&N> = graph.variants::<N>().collect();
+    // Maschinenregister ohne kanten weglassen, virtuelle register immer zeichnen
+    let mut nodes: Vec<&N> = graph
+        .variants::<N>()
+        .filter(|node| node.id().virt().is_some() || has_edges(graph, node.id()))
+        .collect();
     nodes.sort_by_key(|node| node.id());
 
-    // Klassen ohne register (zb float auf soft-float) gar nicht erst zeichnen
-    if nodes.is_empty()
-    {
-        return Ok(());
-    }
-
-    // Name eines maschinenregisters dieser klasse, zb `rdi`
+    // get the physical register names like `rdi`
     let reg_name = |color| format!("{:?}", <N::File<A> as RegFile>::reg_of(color)).to_lowercase();
 
-    writeln!(out, "    subgraph cluster_{:?} {{", N::CLASS)?;
-    writeln!(out, "        label=\"{:?}\";", N::CLASS)?;
+    // unique shape per register file
+    let shape = match N::CLASS
+    {
+        RegClass::Gpr => "circle",
+        RegClass::Float => "box",
+    };
 
     for node in nodes
     {
@@ -123,7 +152,6 @@ fn write_class<A: Arch, N: IntfNode>(out: &mut impl Write, graph: &IntfGraph) ->
             {
                 match node.color().color()
                 {
-                    // Gefärbte virtuelle register zeigen zusätzlich ihr maschinenregister
                     Some(color) => (format!("{reg}\\n{}", reg_name(color)), 1),
                     None => (reg.to_string(), 1),
                 }
@@ -146,16 +174,27 @@ fn write_class<A: Arch, N: IntfNode>(out: &mut impl Write, graph: &IntfGraph) ->
 
         writeln!(
             out,
-            "        {} [label=\"{label}\", peripheries={peripheries}{fill}];",
+            "    {} [label=\"{label}\", shape={shape}, peripheries={peripheries}{fill}];",
             dot_id(node.id())
         )?;
     }
 
-    writeln!(out, "    }}")
+    Ok(())
 }
 
 
-/// Eindeutiger name eines knotens in der dot datei
+fn has_edges(graph: &IntfGraph, id: NodeId) -> bool
+{
+    [IntfEdge::Interferes, IntfEdge::Move]
+        .into_iter()
+        .any(|edge| {
+            let link = graph.any_link(id, edge);
+            link.ids().next().is_some() || link.ids_inverse().next().is_some()
+        })
+}
+
+
+/// maps the node names to node names in the graphviz file
 fn dot_id(id: NodeId) -> String
 {
     match id
