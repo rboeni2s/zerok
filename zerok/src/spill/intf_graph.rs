@@ -1,3 +1,4 @@
+pub mod debug;
 mod graph_setup;
 mod precolor;
 

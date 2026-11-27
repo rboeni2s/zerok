@@ -15,7 +15,7 @@ use crate::{
         Liveness,
         arch::target::SysV64,
         build_interference_graph,
-        intf_graph::precolor,
+        intf_graph::{self, debug, precolor},
         split_functions,
     },
     symbol::Symbol,
@@ -72,6 +72,12 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
         // TODO: Architektur auswahl via cli
         let mut graph = build_interference_graph::<SysV64>(&liveness);
         precolor::<SysV64>(&mut graph, &liveness);
+
+        debug::save_graph_as_dot::<SysV64>(
+            format!("PRECOLOR_{}", debug::get_fn_name_or(func, "UNKNOWN")),
+            &graph,
+        )
+        .expect("Failed to write debug graph");
     }
 
     raw_ir
