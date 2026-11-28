@@ -11,7 +11,9 @@ use crate::{
 use ir::IrChunk;
 
 
-/// Determines the register colors and possibly their spilling
+/// Determines the register colors and possibly their spilling.
+///
+/// Inserts spill code into `func_chunk` if necessary.
 pub fn color_and_spill<A: Arch>(func_chunk: &mut Vec<IrChunk<EnvEntry, Kind>>) -> IntfGraph
 {
     // if "-d" is passed: output the debug graphs
@@ -27,7 +29,7 @@ pub fn color_and_spill<A: Arch>(func_chunk: &mut Vec<IrChunk<EnvEntry, Kind>>) -
         }
     };
 
-    let pass = 0;
+    let mut pass = 0;
     let mut old_spills = vec![];
 
     loop
@@ -59,5 +61,6 @@ pub fn color_and_spill<A: Arch>(func_chunk: &mut Vec<IrChunk<EnvEntry, Kind>>) -
         //TODO: Generate spill code...
 
         old_spills = spills;
+        pass += 1;
     }
 }
