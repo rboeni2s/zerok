@@ -1,3 +1,4 @@
+mod coloring;
 pub mod debug;
 mod graph_setup;
 mod precolor;
@@ -10,6 +11,7 @@ use crate::{
 use ir::IrChunk;
 use std::collections::HashMap;
 
+pub use coloring::color;
 pub use graph_setup::*;
 pub use precolor::precolor;
 
