@@ -515,15 +515,15 @@ fn split_functions_at_func()
         IrChunk::Ret { val: r(257) },
     ];
 
-    let funcs: Vec<_> = split_functions(&chunks).collect();
+    let funcs: Vec<_> = split_functions(chunks.clone()).collect();
 
     assert_eq!(funcs.len(), 2);
     assert_eq!(funcs[0], &chunks[0..2]);
     assert_eq!(funcs[1], &chunks[2..5]);
 
     // R256 ist in f ein int, in g ein float: pro funktion analysiert gibt es keinen konflikt
-    let f = build_interference_graph::<SysV64>(&Liveness::new(funcs[0]));
-    let g = build_interference_graph::<SysV64>(&Liveness::new(funcs[1]));
+    let f = build_interference_graph::<SysV64>(&Liveness::new(&funcs[0]));
+    let g = build_interference_graph::<SysV64>(&Liveness::new(&funcs[1]));
     assert_eq!(nodes::<GprNode>(&f), set(&[256]));
     assert_eq!(nodes::<FloatNode>(&g), set(&[256, 257]));
 }

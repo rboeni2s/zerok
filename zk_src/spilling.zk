@@ -1,5 +1,5 @@
 /*
-    Testprogramm für den Register-Allokator (SysV-64bit)
+    Testprogramm fürs Spilling bei der Registerfärbung (SysV-64bit)
 
     SysV-64bit hat für die Allokation:
     * 13 GPRs, davon nur 5 callee saved (rbx, r12, r13, r14, r15)
@@ -9,7 +9,7 @@
 */
 
 
-/// Hilfsfunktion: Ein call zerstört alle caller saved register
+/// Ein call zerstört alle caller saved register
 op id(x: i64) -> i64
 {
     x

@@ -101,11 +101,24 @@ impl CfgRegs for IrChunk<EnvEntry, Kind>
 /// numbers restart in every function and the same number in two functions means two different
 /// registers.
 pub fn split_functions(
-    chunks: &[IrChunk<EnvEntry, Kind>],
-) -> impl Iterator<Item = &[IrChunk<EnvEntry, Kind>]>
+    chunks: Vec<IrChunk<EnvEntry, Kind>>,
+) -> impl Iterator<Item = Vec<IrChunk<EnvEntry, Kind>>>
 {
-    // Eine neue gruppe beginnt bei jedem `Func`
-    chunks.chunk_by(|_, next| !matches!(next, IrChunk::Func { .. }))
+    let mut chunks = chunks.into_iter().peekable();
+
+    std::iter::from_fn(move || {
+        // Das erste element gehört immer zur gruppe (normalerweise das `Func`),
+        // danach wird so lange gesammelt bis das nächste `Func` kommt.
+        // Eine neue gruppe beginnt also bei jedem `Func`, wie vorher bei `chunk_by`
+        let mut group = vec![chunks.next()?];
+
+        while let Some(chunk) = chunks.next_if(|next| !matches!(next, IrChunk::Func { .. }))
+        {
+            group.push(chunk);
+        }
+
+        Some(group)
+    })
 }
 
 
@@ -116,10 +129,12 @@ pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
     let labels = chunks
         .iter()
         .enumerate()
-        .filter_map(|(i, c)| match c
-        {
-            IrChunk::Label { name } => Some((name.as_str(), CmdIdx(i))),
-            _ => None,
+        .filter_map(|(i, c)| {
+            match c
+            {
+                IrChunk::Label { name } => Some((name.as_str(), CmdIdx(i))),
+                _ => None,
+            }
         })
         .collect::<HashMap<&str, CmdIdx>>();
 
@@ -139,10 +154,13 @@ pub fn cfg_successors(chunks: &[IrChunk<EnvEntry, Kind>]) -> Vec<Vec<CmdIdx>>
 
                 // Conditional Jump: Könnte Springen wie jump, könnte aber auch einfach normal weiter laufen
                 // also sowohl das sprungziel als auch die nächste instruction merken
-                IrChunk::CondJump { name, .. } => [Some(target(name)), next(i)]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
+                IrChunk::CondJump { name, .. } =>
+                {
+                    [Some(target(name)), next(i)]
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                }
 
                 // Bei return ist die funktion zu ende, also keinen nachfolger
                 IrChunk::Ret { .. } => vec![],

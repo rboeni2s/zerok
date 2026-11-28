@@ -5,6 +5,10 @@ pub mod liveness;
 pub mod reg_helper;
 
 
+mod solver;
+pub use solver::color_and_spill;
+
+
 // Newtypes um usize hier, damit nicht für color, register nummern und instruction indexe überall usize
 // steht und ich vergesse was gemeint ist...
 

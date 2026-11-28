@@ -11,13 +11,7 @@ use crate::{
     annotator::{Annotation, EnvEntry, FunctionEntry, Kind, resolve_path},
     parser::{Expr, Function, atom::Atom},
     reg_util::{self, FnReserved, GbReserved},
-    spill::{
-        Liveness,
-        arch::target::SysV64,
-        build_interference_graph,
-        intf_graph::{self, color, debug, precolor},
-        split_functions,
-    },
+    spill::{arch::target::SysV64, color_and_spill, split_functions},
     symbol::Symbol,
 };
 use iic_quote::iic_quote;
@@ -64,31 +58,17 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
     generate_entry_point(env, &mut ir, prelude);
 
     let raw_ir = ir.build();
+    let mut spilled_ir = Vec::with_capacity(raw_ir.len());
 
-    // Register nummern beginnen in jeder funktion neu, also pro funktion analysieren
-    for func in split_functions(&raw_ir)
+    // Register coloring and spilling for each function
+    for mut func in split_functions(raw_ir)
     {
-        let liveness = Liveness::new(func);
-        // TODO: Architektur auswahl via cli
-        let mut graph = build_interference_graph::<SysV64>(&liveness);
-        precolor::<SysV64>(&mut graph, &liveness);
-
-        debug::save_graph_as_dot::<SysV64>(
-            format!("PRECOLOR_{}", debug::get_fn_name_or(func, "UNKNOWN")),
-            &graph,
-        )
-        .expect("Failed to write debug graph");
-
-        dbg!(color::<SysV64>(&mut graph));
-
-        debug::save_graph_as_dot::<SysV64>(
-            format!("COL_1_{}", debug::get_fn_name_or(func, "UNKNOWN")),
-            &graph,
-        )
-        .expect("Failed to write debug graph");
+        //TODO: Architecture selection via cli
+        let _graph = color_and_spill::<SysV64>(&mut func);
+        spilled_ir.extend(func);
     }
 
-    raw_ir
+    spilled_ir
 }
 
 
