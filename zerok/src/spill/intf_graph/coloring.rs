@@ -1,4 +1,5 @@
 use crate::spill::{
+    Color,
     FloatNode,
     GprNode,
     IntfEdge,
@@ -105,5 +106,42 @@ fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
 
         // Finally push the candidate on the stack
         stack.push(candidate);
+    }
+
+    // Now color the graph based on the stack contents
+    while let Some(id) = stack.pop()
+    {
+        // Collect the colors of the neighbors into a hash set
+        let forbidden: HashSet<Color> = intf_adj[&id]
+            .iter()
+            .filter_map(|_| graph.get::<N>(id).and_then(|n| n.color().color()))
+            .collect();
+
+        // Prefer the color hints given by move-edges (calling convention, coalescing light)
+        let hinted = move_adj[&id]
+            .iter()
+            // get an iterator over every hinted color
+            .filter_map(|_| graph.get::<N>(id).and_then(|n| n.color().color()))
+            // now chose a color out of these hints that is not already chosen by one of the nodes neighbors
+            // if there is no such color, then the hint is invalid and can not be respected when selecting a color.
+            .find(|c| !forbidden.contains(c));
+
+        // Now chose a color based on these choices (in order of preference):
+        // 1. Use the hinted color if a valid hinted color was found.
+        // 2. Use the lowest color that is not already used by a neighbor.
+        let color = match hinted.or_else(|| (0..k).map(Color).find(|c| !forbidden.contains(c)))
+        {
+            // Great: A color was selected! Return it!
+            Some(c) => NodeColor::Colored(c),
+
+            // No color could be selected, this node needs to be spilled.
+            None => NodeColor::Spilled,
+        };
+
+        // Set the nodes color on the graph
+        if let Some(node) = graph.get_mut::<N>(id)
+        {
+            node.set_color(color);
+        }
     }
 }

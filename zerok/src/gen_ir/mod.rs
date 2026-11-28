@@ -80,6 +80,12 @@ pub fn generate_ir<'a>(prog: &ProgAst<'a>, env: &Env<'a>) -> Vec<IrChunk<EnvEntr
         .expect("Failed to write debug graph");
 
         color::<SysV64>(&mut graph);
+
+        debug::save_graph_as_dot::<SysV64>(
+            format!("COL_1_{}", debug::get_fn_name_or(func, "UNKNOWN")),
+            &graph,
+        )
+        .expect("Failed to write debug graph");
     }
 
     raw_ir
