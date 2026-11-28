@@ -1,0 +1,79 @@
+/*
+    Testprogramm für den Register-Allokator (SysV-64bit)
+
+    SysV-64bit hat für die Allokation:
+    * 13 GPRs, davon nur 5 callee saved (rbx, r12, r13, r14, r15)
+    * 15 SSE-Register (xmm0 - xmm14), alle caller saved
+
+    Jede Funktion unten sollte daher mindestens ein Register spillen.
+*/
+
+
+/// Hilfsfunktion: Ein call zerstört alle caller saved register
+op id(x: i64) -> i64
+{
+    x
+}
+
+
+/// 8 Werte leben über einen call hinweg, es gibt aber nur 5 callee saved GPRs
+op across_call(x: i64) -> i64
+{
+    sett a: i64 = x + 1;
+    sett b: i64 = x + 2;
+    sett c: i64 = x + 3;
+    sett d: i64 = x + 4;
+    sett e: i64 = x + 5;
+    sett f: i64 = x + 6;
+    sett g: i64 = x + 7;
+    sett h: i64 = x + 8;
+
+    sett r: i64 = id(x);
+
+    a + b + c + d + e + f + g + h + r
+}
+
+
+/// 16 Werte sind gleichzeitig live es gibt aber nur 13 GPRs
+op pressure(x: i64) -> i64
+{
+    sett a: i64 = x * 2;
+    sett b: i64 = x * 3;
+    sett c: i64 = x * 4;
+    sett d: i64 = x * 5;
+    sett e: i64 = x * 6;
+    sett f: i64 = x * 7;
+    sett g: i64 = x * 8;
+    sett h: i64 = x * 9;
+    sett i: i64 = x * 10;
+    sett j: i64 = x * 11;
+    sett k: i64 = x * 12;
+    sett l: i64 = x * 13;
+    sett m: i64 = x * 14;
+    sett n: i64 = x * 15;
+    sett o: i64 = x * 16;
+    sett p: i64 = x * 17;
+
+    // Erst hier wird alles gelesen, also leben alle 16 Werte bis hierhin gleichzeitig
+    a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p
+}
+
+
+/// Ein float der über einen call lebt, hat unter SysV kein einziges erlaubtes register
+/// mindestens 1 spill in der float klasse
+op float_across_call(x: f64) -> f64
+{
+    sett y: f64 = x * x;
+    id(1);
+    y + x
+}
+
+
+op main() -> u32
+{
+    sett a: i64 = across_call(1);
+    sett b: i64 = pressure(2);
+    sett c: f64 = float_across_call(3.0f);
+
+    (a + b + c as i64) as u32
+}

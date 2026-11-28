@@ -14,15 +14,21 @@ use std::collections::{HashMap, HashSet};
 
 
 /// Colors a pre-colored graph respecting the the architecture `A`
-pub fn color<A: Arch>(graph: &mut IntfGraph)
+///
+/// Returns a vector containing the ids of all spilled nodes
+pub fn color<A: Arch>(graph: &mut IntfGraph) -> Vec<NodeId>
 {
-    color_class::<A, GprNode>(graph);
-    color_class::<A, FloatNode>(graph);
+    let mut spilled = vec![];
+
+    color_class::<A, GprNode>(graph, &mut spilled);
+    color_class::<A, FloatNode>(graph, &mut spilled);
+
+    spilled
 }
 
 
 // Colors a specific class of registers in the given Architecture
-fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
+fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph, spilled: &mut Vec<NodeId>)
 {
     // k-coloring of the graph
     let k = <N::File<A> as RegFile>::COLORS; // Count of usable registers in this class
@@ -47,6 +53,7 @@ fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
         {
             if let Some(node) = graph.get_mut::<N>(id)
             {
+                spilled.push(*id);
                 node.set_color(NodeColor::Spilled);
             }
         }
@@ -80,7 +87,7 @@ fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
     // Find all nodes that are trivially colorable (degree < k), push them on the stack and decrease
     // the degrees of their neighbors by 1. If no such node exists decide on a node to spill and push that onto
     // the stack instead...
-    if remaining.is_empty()
+    while !remaining.is_empty()
     {
         // Find a suitable candidate...
         let candidate = match remaining.iter().find(|id| degree[id] < k)
@@ -114,14 +121,14 @@ fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
         // Collect the colors of the neighbors into a hash set
         let forbidden: HashSet<Color> = intf_adj[&id]
             .iter()
-            .filter_map(|_| graph.get::<N>(id).and_then(|n| n.color().color()))
+            .filter_map(|&n| graph.get::<N>(n).and_then(|n| n.color().color()))
             .collect();
 
         // Prefer the color hints given by move-edges (calling convention, coalescing light)
         let hinted = move_adj[&id]
             .iter()
             // get an iterator over every hinted color
-            .filter_map(|_| graph.get::<N>(id).and_then(|n| n.color().color()))
+            .filter_map(|&n| graph.get::<N>(n).and_then(|n| n.color().color()))
             // now chose a color out of these hints that is not already chosen by one of the nodes neighbors
             // if there is no such color, then the hint is invalid and can not be respected when selecting a color.
             .find(|c| !forbidden.contains(c));
@@ -135,7 +142,11 @@ fn color_class<A: Arch, N: IntfNode>(graph: &mut IntfGraph)
             Some(c) => NodeColor::Colored(c),
 
             // No color could be selected, this node needs to be spilled.
-            None => NodeColor::Spilled,
+            None =>
+            {
+                spilled.push(id);
+                NodeColor::Spilled
+            }
         };
 
         // Set the nodes color on the graph
